@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== 用戶系統 =====
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String?   @unique
+  username      String?   @unique
+  password      String
+  role          UserRole  @default(STUDENT)
+  avatar        String?
+  points        Int       @default(0)
+  streak        Int       @default(0)
+  lastActiveAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Student relations
+  classEnrollments  ClassStudent[]
+  practiceRecords   PracticeRecord[]
+  spellingRecords   SpellingRecord[]
+  achievements      Achievement[]
+  pointHistory      PointHistory[]
+  assignmentSubmissions AssignmentSubmission[]
+
+  // Teacher relations
+  teachingClasses   Class[]       @relation("TeacherClasses")
+  createdArticles   Article[]     @relation("ArticleAuthor")
+  createdAssignments Assignment[] @relation("AssignmentCreator")
+
+  @@map("users")
+}
+
+// ===== 班級系統 =====
+
+model Class {
+  id          String   @id @default(cuid())
+  name        String
+  gradeLevel  Int      @default(1)
+  description String?
+  inviteCode  String   @unique @default(cuid())
+  teacherId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacher     User          @relation("TeacherClasses", fields: [teacherId], references: [id])
+  students    ClassStudent[]
+  assignments Assignment[]
+
+  @@map("classes")
+}
+
+model ClassStudent {
+  id        String   @id @default(cuid())
+  classId   String
+  studentId String
+  joinedAt  DateTime @default(now())
+
+  class     Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student   User  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+  @@map("class_students")
+}
+
+// ===== 教材系統 =====
+
+enum ArticleLevel {
+  LEVEL1
+  LEVEL2
+  LEVEL3
+}
+
+model Article {
+  id           String       @id @default(cuid())
+  title        String
+  titleZh      String       // 中文標題
+  content      String       // 英文內文
+  contentZh    String?      // 中文翻譯
+  level        ArticleLevel @default(LEVEL1)
+  gradeLevel   Int          @default(1)
+  topic        String?      // 主題分類
+  audioUrl     String?      // 朗讀音檔 URL
+  imageUrl     String?      // 封面圖片
+  isPublished  Boolean      @default(true)
+  authorId     String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  author       User?        @relation("ArticleAuthor", fields: [authorId], references: [id])
+  words        Word[]
+  exercises    Exercise[]
+  assignments  Assignment[]
+  practiceRecords PracticeRecord[]
+
+  @@map("articles")
+}
+
+model Word {
+  id           String   @id @default(cuid())
+  word         String
+  phonetic     String?  // 音標
+  translation  String   // 中文翻譯
+  exampleSentence String?
+  imageUrl     String?
+  audioUrl     String?
+  articleId    String
+  orderIndex   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  article      Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  spellingRecords SpellingRecord[]
+
+  @@map("words")
+}
+
+model Exercise {
+  id          String   @id @default(cuid())
+  articleId   String
+  type        String   // spelling, picture_match, read_aloud, qa
+  question    String
+  options     String?  // JSON string for multiple choice options
+  answer      String
+  audioUrl    String?
+  imageUrl    String?
+  orderIndex  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@map("exercises")
+}
+
+// ===== 作業系統 =====
+
+enum AssignmentType {
+  READING
+  VOCABULARY
+  SPEAKING
+  MIXED
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  CLOSED
+  DRAFT
+}
+
+model Assignment {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  type        AssignmentType   @default(MIXED)
+  status      AssignmentStatus @default(ACTIVE)
+  classId     String
+  articleId   String?
+  teacherId   String
+  dueDate     DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  class       Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  article     Article? @relation(fields: [articleId], references: [id])
+  teacher     User     @relation("AssignmentCreator", fields: [teacherId], references: [id])
+  submissions AssignmentSubmission[]
+
+  @@map("assignments")
+}
+
+model AssignmentSubmission {
+  id           String   @id @default(cuid())
+  assignmentId String
+  studentId    String
+  status       String   @default("pending") // pending, in_progress, completed
+  score        Float?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@map("assignment_submissions")
+}
+
+// ===== 練習紀錄 =====
+
+model PracticeRecord {
+  id          String   @id @default(cuid())
+  studentId   String
+  articleId   String?
+  type        String   // reading, speaking, vocabulary
+  audioUrl    String?  // 學生錄音
+  transcript  String?  // 語音轉文字
+  score       Float?   // 總分 0-100
+  accuracy    Float?   // 發音準確度
+  fluency     Float?   // 流暢度
+  completeness Float?  // 完整度
+  wordScores  String?  // JSON: 逐字評分
+  feedback    String?  // AI 回饋
+  duration    Int?     // 練習時長（秒）
+  createdAt   DateTime @default(now())
+
+  student     User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  article     Article? @relation(fields: [articleId], references: [id])
+
+  @@map("practice_records")
+}
+
+model SpellingRecord {
+  id        String   @id @default(cuid())
+  studentId String
+  wordId    String
+  isCorrect Boolean
+  attempts  Int      @default(1)
+  timeSpent Int?     // 答題時間（秒）
+  createdAt DateTime @default(now())
+
+  student   User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  word      Word @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@map("spelling_records")
+}
+
+// ===== 遊戲化 =====
+
+model Achievement {
+  id        String   @id @default(cuid())
+  studentId String
+  badge     String   // streak_7, perfect_score, spelling_king, etc.
+  title     String
+  icon      String?
+  earnedAt  DateTime @default(now())
+
+  student   User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, badge])
+  @@map("achievements")
+}
+
+model PointHistory {
+  id        String   @id @default(cuid())
+  studentId String
+  amount    Int
+  source    String   // practice, streak, achievement, daily_login
+  detail    String?
+  createdAt DateTime @default(now())
+
+  student   User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("point_history")
+}
