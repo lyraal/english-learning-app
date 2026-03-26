@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import StudentLayout from "@/components/student/StudentLayout";
 import { getLevelLabel, getLevelColor } from "@/lib/utils";
+import { speak, stopSpeaking, speakSentences } from "@/lib/speech";
 
 interface ArticleDetail {
   id: string;
@@ -42,9 +43,20 @@ export default function ArticleDetailPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(0.8);
 
+  // 用 ref 儲存取消函式
+  const cancelPlayRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     fetchArticle();
   }, [params.id]);
+
+  // 組件卸載時停止播放
+  useEffect(() => {
+    return () => {
+      if (cancelPlayRef.current) cancelPlayRef.current();
+      stopSpeaking();
+    };
+  }, []);
 
   async function fetchArticle() {
     try {
@@ -59,40 +71,49 @@ export default function ArticleDetailPage() {
 
   const sentences = article?.content.split(/(?<=[.!?])\s+/) || [];
 
-  // TTS 朗讀
-  const speakSentence = useCallback(
-    async (index: number) => {
-      if (!sentences[index]) return;
-
-      const utterance = new SpeechSynthesisUtterance(sentences[index]);
-      utterance.lang = "en-US";
-      utterance.rate = playbackRate;
-
-      setHighlightedSentence(index);
-
-      utterance.onend = () => {
-        if (index < sentences.length - 1 && isPlaying) {
-          speakSentence(index + 1);
-        } else {
-          setHighlightedSentence(-1);
-          setIsPlaying(false);
-        }
-      };
-
-      window.speechSynthesis.speak(utterance);
-    },
-    [sentences, playbackRate, isPlaying]
-  );
-
   function handlePlayAll() {
     if (isPlaying) {
-      window.speechSynthesis.cancel();
+      // 停止播放
+      if (cancelPlayRef.current) {
+        cancelPlayRef.current();
+        cancelPlayRef.current = null;
+      }
+      stopSpeaking();
       setIsPlaying(false);
       setHighlightedSentence(-1);
     } else {
+      // 開始逐句播放
       setIsPlaying(true);
-      speakSentence(0);
+      const cancel = speakSentences(
+        sentences,
+        (index) => setHighlightedSentence(index),
+        () => {
+          setIsPlaying(false);
+          setHighlightedSentence(-1);
+          cancelPlayRef.current = null;
+        },
+        playbackRate
+      );
+      cancelPlayRef.current = cancel;
     }
+  }
+
+  async function handleSentenceClick(sentence: string, idx: number) {
+    // 停止目前播放
+    if (cancelPlayRef.current) {
+      cancelPlayRef.current();
+      cancelPlayRef.current = null;
+      setIsPlaying(false);
+    }
+    stopSpeaking();
+
+    setHighlightedSentence(idx);
+    try {
+      await speak(sentence, playbackRate);
+    } catch {
+      // 忽略播放錯誤
+    }
+    setHighlightedSentence(-1);
   }
 
   function handleWordClick(word: string, e: React.MouseEvent) {
@@ -101,11 +122,8 @@ export default function ArticleDetailPage() {
     );
 
     if (wordData) {
-      // Speak the word
-      const utterance = new SpeechSynthesisUtterance(wordData.word);
-      utterance.lang = "en-US";
-      utterance.rate = 0.7;
-      window.speechSynthesis.speak(utterance);
+      // 用 Azure TTS 朗讀單字
+      speak(wordData.word, 0.7);
 
       setActiveWord({
         word: wordData.word,
@@ -150,7 +168,11 @@ export default function ArticleDetailPage() {
     <StudentLayout>
       {/* 返回按鈕 */}
       <button
-        onClick={() => router.push("/articles")}
+        onClick={() => {
+          stopSpeaking();
+          if (cancelPlayRef.current) cancelPlayRef.current();
+          router.push("/articles");
+        }}
         className="flex items-center gap-1 text-primary-500 font-bold mb-4 hover:text-primary-700"
       >
         ← 回到文章列表
@@ -218,15 +240,7 @@ export default function ArticleDetailPage() {
                   ? "bg-kid-yellow/30 rounded px-1"
                   : ""
               }`}
-              onClick={() => {
-                const utterance = new SpeechSynthesisUtterance(sentence);
-                utterance.lang = "en-US";
-                utterance.rate = playbackRate;
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(utterance);
-                setHighlightedSentence(idx);
-                setTimeout(() => setHighlightedSentence(-1), 3000);
-              }}
+              onClick={() => handleSentenceClick(sentence, idx)}
             >
               {sentence.split(/(\s+)/).map((word, wIdx) => {
                 const cleanWord = word.replace(/[^\w]/g, "").toLowerCase();
@@ -280,12 +294,7 @@ export default function ArticleDetailPage() {
             <div
               key={word.id}
               className="flex items-center gap-3 p-3 bg-gray-50 rounded-kid cursor-pointer hover:bg-primary-50 transition-colors"
-              onClick={() => {
-                const utterance = new SpeechSynthesisUtterance(word.word);
-                utterance.lang = "en-US";
-                utterance.rate = 0.7;
-                window.speechSynthesis.speak(utterance);
-              }}
+              onClick={() => speak(word.word, 0.7)}
             >
               <span className="text-2xl">🔊</span>
               <div className="flex-1">
@@ -309,13 +318,21 @@ export default function ArticleDetailPage() {
       {/* 開始練習按鈕 */}
       <div className="grid grid-cols-2 gap-3">
         <button
-          onClick={() => router.push(`/speaking?articleId=${article.id}`)}
+          onClick={() => {
+            stopSpeaking();
+            if (cancelPlayRef.current) cancelPlayRef.current();
+            router.push(`/speaking?articleId=${article.id}`);
+          }}
           className="btn-kid-accent w-full"
         >
           🎤 口說練習
         </button>
         <button
-          onClick={() => router.push(`/vocabulary?articleId=${article.id}`)}
+          onClick={() => {
+            stopSpeaking();
+            if (cancelPlayRef.current) cancelPlayRef.current();
+            router.push(`/vocabulary?articleId=${article.id}`);
+          }}
           className="btn-kid-success w-full"
         >
           ✏️ 單字練習
@@ -349,14 +366,7 @@ export default function ArticleDetailPage() {
               </p>
             )}
             <button
-              onClick={() => {
-                const utterance = new SpeechSynthesisUtterance(
-                  activeWord.word
-                );
-                utterance.lang = "en-US";
-                utterance.rate = 0.6;
-                window.speechSynthesis.speak(utterance);
-              }}
+              onClick={() => speak(activeWord.word, 0.6)}
               className="btn-kid-primary w-full mt-4"
             >
               🔊 再聽一次

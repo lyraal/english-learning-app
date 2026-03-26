@@ -3,7 +3,15 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import StudentLayout from "@/components/student/StudentLayout";
-import { scoreToStars } from "@/lib/speech";
+import {
+  scoreToStars,
+  speak,
+  stopSpeaking,
+  startRecording,
+  assessPronunciation,
+  checkMicrophone,
+} from "@/lib/speech";
+import type { RecordingSession } from "@/lib/speech";
 
 interface SpeakingArticle {
   id: string;
@@ -16,6 +24,7 @@ interface WordScore {
   word: string;
   score: number;
   status: "good" | "fair" | "poor";
+  errorType?: string;
 }
 
 interface SpeechResult {
@@ -38,14 +47,13 @@ export default function SpeakingPage() {
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isPlayingExample, setIsPlayingExample] = useState(false);
   const [result, setResult] = useState<SpeechResult | null>(null);
   const [error, setError] = useState("");
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [mode, setMode] = useState<"full" | "sentence">("sentence");
 
-  const recognitionRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingSessionRef = useRef<RecordingSession | null>(null);
 
   useEffect(() => {
     fetchArticles();
@@ -71,139 +79,80 @@ export default function SpeakingPage() {
   const currentTarget =
     mode === "sentence" ? sentences[currentSentenceIndex] || "" : selectedArticle?.content || "";
 
-  function playExample() {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(currentTarget);
-    utterance.lang = "en-US";
-    utterance.rate = 0.75;
-    window.speechSynthesis.speak(utterance);
+  async function playExample() {
+    if (isPlayingExample) {
+      stopSpeaking();
+      setIsPlayingExample(false);
+      return;
+    }
+
+    setIsPlayingExample(true);
+    try {
+      await speak(currentTarget, 0.75);
+    } catch (err) {
+      console.warn("播放範例失敗:", err);
+    } finally {
+      setIsPlayingExample(false);
+    }
   }
 
-  async function startRecording() {
+  async function handleStartRecording() {
     setError("");
     setResult(null);
 
     try {
-      // Start audio recording
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.start(100);
-
-      // Start speech recognition
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-      if (!SpeechRecognition) {
-        throw new Error("此瀏覽器不支援語音辨識，請使用 Chrome");
-      }
-
-      const recognition = new SpeechRecognition();
-      recognition.lang = "en-US";
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognitionRef.current = recognition;
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        const confidence = event.results[0][0].confidence;
-        processResult(transcript, confidence);
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event.error === "no-speech") {
-          setError("沒有偵測到語音，請對著麥克風大聲說！");
-        } else {
-          setError("語音辨識失敗，請再試一次");
-        }
-        stopRecording();
-      };
-
-      recognition.onend = () => {
-        stopMediaRecorder();
-      };
-
-      recognition.start();
+      const session = await startRecording();
+      recordingSessionRef.current = session;
       setIsRecording(true);
     } catch (err: any) {
       setError(err.message || "無法啟動錄音");
     }
   }
 
-  function stopRecording() {
+  async function handleStopRecording() {
+    if (!recordingSessionRef.current) return;
+
     setIsRecording(false);
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-    stopMediaRecorder();
-  }
-
-  function stopMediaRecorder() {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
-    }
-  }
-
-  function processResult(transcript: string, confidence: number) {
     setIsProcessing(true);
-    setIsRecording(false);
 
-    const targetWords = currentTarget.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/);
-    const spokenWords = transcript.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/);
+    try {
+      const audioBlob = await recordingSessionRef.current.stop();
 
-    const wordScores: WordScore[] = targetWords.map((tw) => {
-      const found = spokenWords.some(
-        (sw) => sw === tw || levenshtein(sw, tw) <= Math.max(1, Math.floor(tw.length * 0.3))
-      );
-      const score = found ? Math.round(70 + confidence * 30) : Math.round(confidence * 30);
-      return {
-        word: tw,
-        score,
-        status: score >= 80 ? "good" : score >= 50 ? "fair" : "poor",
-      };
-    });
+      console.log(`[speaking] WAV blob size: ${(audioBlob.size / 1024).toFixed(1)}KB`);
 
-    const matched = wordScores.filter((w) => w.status !== "poor").length;
-    const completeness = Math.round((matched / targetWords.length) * 100);
-    const accuracy = Math.round(wordScores.reduce((s, w) => s + w.score, 0) / wordScores.length);
-    const fluency = Math.round(confidence * 100);
-    const overallScore = Math.round(accuracy * 0.4 + fluency * 0.3 + completeness * 0.3);
+      // 呼叫 Azure Pronunciation Assessment
+      const speechResult = await assessPronunciation(audioBlob, currentTarget);
 
-    const speechResult: SpeechResult = {
-      transcript,
-      overallScore,
-      accuracy,
-      fluency,
-      completeness,
-      wordScores,
-    };
+      setResult({
+        transcript: speechResult.transcript,
+        overallScore: speechResult.overallScore,
+        accuracy: speechResult.accuracy,
+        fluency: speechResult.fluency,
+        completeness: speechResult.completeness,
+        wordScores: speechResult.wordScores,
+      });
 
-    setResult(speechResult);
-    setIsProcessing(false);
-
-    // Save record
-    fetch("/api/speaking/record", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        articleId: selectedArticle?.id,
-        type: "speaking",
-        transcript,
-        score: overallScore,
-        accuracy,
-        fluency,
-        completeness,
-        wordScores: JSON.stringify(wordScores),
-      }),
-    }).catch(() => {});
+      // 儲存紀錄
+      fetch("/api/speaking/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          articleId: selectedArticle?.id,
+          type: "speaking",
+          transcript: speechResult.transcript,
+          score: speechResult.overallScore,
+          accuracy: speechResult.accuracy,
+          fluency: speechResult.fluency,
+          completeness: speechResult.completeness,
+          wordScores: JSON.stringify(speechResult.wordScores),
+        }),
+      }).catch(() => {});
+    } catch (err: any) {
+      setError(err.message || "發音評估失敗，請再試一次");
+    } finally {
+      setIsProcessing(false);
+      recordingSessionRef.current = null;
+    }
   }
 
   function nextSentence() {
@@ -274,6 +223,7 @@ export default function SpeakingPage() {
             setSelectedArticle(null);
             setResult(null);
             setCurrentSentenceIndex(0);
+            stopSpeaking();
           }}
           className="text-primary-500 font-bold hover:text-primary-700"
         >
@@ -316,6 +266,7 @@ export default function SpeakingPage() {
                       ? "word-fair"
                       : "word-poor"
                   }`}
+                  title={`${ws.score}分${ws.errorType && ws.errorType !== "None" ? ` (${ws.errorType})` : ""}`}
                 >
                   {ws.word}
                 </span>
@@ -326,9 +277,13 @@ export default function SpeakingPage() {
         {/* Play example button */}
         <button
           onClick={playExample}
-          className="btn-kid bg-primary-50 text-primary-600 hover:bg-primary-100 !px-5 !py-2 mb-4"
+          className={`btn-kid ${
+            isPlayingExample
+              ? "bg-red-50 text-red-600 hover:bg-red-100"
+              : "bg-primary-50 text-primary-600 hover:bg-primary-100"
+          } !px-5 !py-2 mb-4`}
         >
-          🔊 聽範例
+          {isPlayingExample ? "⏹ 停止播放" : "🔊 聽範例"}
         </button>
 
         {/* Sentence navigation */}
@@ -355,7 +310,7 @@ export default function SpeakingPage() {
       {/* Recording button */}
       <div className="flex justify-center mb-6">
         <button
-          onClick={isRecording ? stopRecording : startRecording}
+          onClick={isRecording ? handleStopRecording : handleStartRecording}
           disabled={isProcessing}
           className={`w-24 h-24 rounded-full flex items-center justify-center text-4xl
                      transition-all active:scale-90 shadow-lg ${
@@ -374,7 +329,7 @@ export default function SpeakingPage() {
         {isRecording
           ? "正在錄音... 說完後點擊停止"
           : isProcessing
-          ? "分析中..."
+          ? "Azure 語音分析中..."
           : "點擊麥克風開始錄音"}
       </p>
 
@@ -406,6 +361,7 @@ export default function SpeakingPage() {
             <p className="text-kid-2xl font-black text-primary-600">
               {result.overallScore} 分
             </p>
+            <p className="text-xs text-gray-400 mt-1">Azure Pronunciation Assessment</p>
           </div>
 
           {/* Score breakdown */}
@@ -430,6 +386,13 @@ export default function SpeakingPage() {
             </div>
           </div>
 
+          {/* Word-level feedback legend */}
+          <div className="flex justify-center gap-4 mb-3 text-xs text-gray-500">
+            <span><span className="inline-block w-3 h-3 rounded bg-green-100 border border-green-300 mr-1"></span>良好 ≥80</span>
+            <span><span className="inline-block w-3 h-3 rounded bg-yellow-100 border border-yellow-300 mr-1"></span>尚可 50-79</span>
+            <span><span className="inline-block w-3 h-3 rounded bg-red-100 border border-red-300 mr-1"></span>需加強 &lt;50</span>
+          </div>
+
           {/* Transcript */}
           <div className="bg-gray-50 rounded-lg p-3 mb-3">
             <p className="text-xs text-gray-400 mb-1">你說的是：</p>
@@ -446,14 +409,4 @@ export default function SpeakingPage() {
       )}
     </StudentLayout>
   );
-}
-
-function levenshtein(a: string, b: string): number {
-  const dp: number[][] = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
-  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
-  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-  for (let i = 1; i <= a.length; i++)
-    for (let j = 1; j <= b.length; j++)
-      dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
-  return dp[a.length][b.length];
 }

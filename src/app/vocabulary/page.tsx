@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import StudentLayout from "@/components/student/StudentLayout";
+import { speak } from "@/lib/speech";
 
 interface Word {
   id: string;
@@ -101,17 +102,11 @@ export default function VocabularyPage() {
 
     if (isCorrect) {
       setScore((p) => p + 1);
-      // Play success sound via TTS
-      const utterance = new SpeechSynthesisUtterance("Great job!");
-      utterance.lang = "en-US";
-      utterance.rate = 1;
-      window.speechSynthesis.speak(utterance);
+      // Play success sound via Azure TTS
+      speak("Great job!", 1.0);
     } else {
-      // Speak the correct word
-      const utterance = new SpeechSynthesisUtterance(currentWord.word);
-      utterance.lang = "en-US";
-      utterance.rate = 0.7;
-      window.speechSynthesis.speak(utterance);
+      // Speak the correct word via Azure TTS
+      speak(currentWord.word, 0.7);
     }
 
     // Save record
@@ -167,10 +162,7 @@ export default function VocabularyPage() {
 
   function playWordAudio() {
     if (currentWord) {
-      const utterance = new SpeechSynthesisUtterance(currentWord.word);
-      utterance.lang = "en-US";
-      utterance.rate = 0.6;
-      window.speechSynthesis.speak(utterance);
+      speak(currentWord.word, 0.6);
     }
   }
 
