@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import StudentLayout from "@/components/student/StudentLayout";
 import { speak } from "@/lib/speech";
@@ -16,6 +16,14 @@ interface Word {
 type GameType = "spelling" | "picture_match" | "drag_letters";
 
 export default function VocabularyPage() {
+  return (
+    <Suspense fallback={<StudentLayout><p className="text-center py-12 text-gray-500">載入中...</p></StudentLayout>}>
+      <VocabularyPageContent />
+    </Suspense>
+  );
+}
+
+function VocabularyPageContent() {
   const searchParams = useSearchParams();
   const articleId = searchParams.get("articleId");
 

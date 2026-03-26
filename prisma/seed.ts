@@ -41,7 +41,7 @@ async function main() {
   console.log(`  ✅ 建立老師：${teacher.name} (${teacher.email})`);
 
   // Create students
-  const students = [];
+  const students: Awaited<ReturnType<typeof prisma.user.create>>[] = [];
   for (const s of seedStudents) {
     const student = await prisma.user.create({
       data: {
