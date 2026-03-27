@@ -31,6 +31,8 @@ export default function LoginPage() {
         const session = await res.json();
         if (session?.user?.role === "TEACHER" || session?.user?.role === "ADMIN") {
           router.push("/admin");
+        } else if (session?.user?.role === "PARENT") {
+          router.push("/parent");
         } else {
           router.push("/dashboard");
         }
@@ -110,7 +112,7 @@ export default function LoginPage() {
         {/* 測試帳號提示 */}
         <div className="mt-6 pt-4 border-t-2 border-gray-100">
           <p className="text-sm text-gray-400 text-center mb-3">測試帳號</p>
-          <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+          <div className="grid grid-cols-3 gap-2 text-xs text-gray-500">
             <div className="bg-gray-50 rounded-lg p-2 text-center">
               <div className="font-bold">學生</div>
               <div>student1 / 123456</div>
@@ -118,6 +120,10 @@ export default function LoginPage() {
             <div className="bg-gray-50 rounded-lg p-2 text-center">
               <div className="font-bold">老師</div>
               <div>teacher@test.com / 123456</div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-2 text-center">
+              <div className="font-bold">家長</div>
+              <div>parent1 / 123456</div>
             </div>
           </div>
         </div>

@@ -13,6 +13,7 @@ enum UserRole {
   STUDENT
   TEACHER
   ADMIN
+  PARENT
 }
 
 model User {
@@ -44,7 +45,25 @@ model User {
   createdArticles   Article[]     @relation("ArticleAuthor")
   createdAssignments Assignment[] @relation("AssignmentCreator")
 
+  // Parent relations
+  parentOf  ParentChild[] @relation("ParentRelation")
+  childOf   ParentChild[] @relation("ChildRelation")
+
   @@map("users")
+}
+
+// ===== 家長-孩子關聯 =====
+
+model ParentChild {
+  id        String   @id @default(cuid())
+  parentId  String
+  childId   String
+  parent    User     @relation("ParentRelation", fields: [parentId], references: [id])
+  child     User     @relation("ChildRelation", fields: [childId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([parentId, childId])
+  @@map("parent_children")
 }
 
 // ===== 班級系統 =====

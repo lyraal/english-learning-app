@@ -27,6 +27,7 @@ async function main() {
   await prisma.classStudent.deleteMany();
   await prisma.class.deleteMany();
   await prisma.article.deleteMany();
+  await prisma.parentChild.deleteMany();
   await prisma.user.deleteMany();
 
   console.log("  ✅ 清除舊資料完成");
@@ -200,9 +201,33 @@ async function main() {
     console.log("  ✅ 建立範例徽章");
   }
 
+  // Create parent user
+  const parent1 = await prisma.user.create({
+    data: {
+      name: "王爸爸",
+      username: "parent1",
+      password: await hash("123456", 10),
+      role: "PARENT",
+      avatar: "👨",
+    },
+  });
+  console.log(`  ✅ 建立家長：${parent1.name} (${parent1.username})`);
+
+  // Link parent to first student
+  if (students.length > 0) {
+    await prisma.parentChild.create({
+      data: {
+        parentId: parent1.id,
+        childId: students[0].id,
+      },
+    });
+    console.log(`  ✅ 建立親子關聯：${parent1.name} → ${students[0].name}`);
+  }
+
   console.log("\n🎉 Seed 完成！");
   console.log(`   老師帳號：${seedTeacher.email} / ${seedTeacher.password}`);
   console.log(`   學生帳號：student1 / 123456`);
+  console.log(`   家長帳號：parent1 / 123456`);
   console.log(`   共 ${seedArticles.length + seedArticlesAdvanced.length} 篇文章 (Level 1-6)`);
 }
 
