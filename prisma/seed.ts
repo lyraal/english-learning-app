@@ -6,13 +6,16 @@ import {
   seedStudents,
   seedClass,
 } from "../src/data/seed-articles";
+import { seedArticlesAdvanced } from "../src/data/seed-articles-advanced";
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 開始 seed 資料...");
 
-  // Clean existing data
+  // Clean existing data (in correct order for FK constraints)
+  await prisma.dailyMission.deleteMany();
+  await prisma.writingSubmission.deleteMany();
   await prisma.pointHistory.deleteMany();
   await prisma.achievement.deleteMany();
   await prisma.spellingRecord.deleteMany();
@@ -77,7 +80,16 @@ async function main() {
   }
   console.log(`  ✅ 將 ${students.length} 位學生加入班級`);
 
-  // Create articles with words and exercises
+  // Category mapping for existing articles
+  const categoryMap: Record<string, string> = {
+    "動物": "nature",
+    "家庭": "daily_life",
+    "戶外活動": "daily_life",
+    "學校生活": "daily_life",
+    "食物/水果": "daily_life",
+  };
+
+  // Create original articles (Level 1-3)
   for (const articleData of seedArticles) {
     const article = await prisma.article.create({
       data: {
@@ -88,28 +100,21 @@ async function main() {
         level: articleData.level,
         gradeLevel: articleData.gradeLevel,
         topic: articleData.topic,
+        category: categoryMap[articleData.topic || ""] || "daily_life",
         authorId: teacher.id,
         isPublished: true,
       },
     });
 
-    // Create words
     for (const wordData of articleData.words) {
       await prisma.word.create({
-        data: {
-          ...wordData,
-          articleId: article.id,
-        },
+        data: { ...wordData, articleId: article.id },
       });
     }
 
-    // Create exercises
     for (const exerciseData of articleData.exercises) {
       await prisma.exercise.create({
-        data: {
-          ...exerciseData,
-          articleId: article.id,
-        },
+        data: { ...exerciseData, articleId: article.id },
       });
     }
 
@@ -118,16 +123,51 @@ async function main() {
     );
   }
 
+  // Create advanced articles (Level 4-6)
+  for (const articleData of seedArticlesAdvanced) {
+    const article = await prisma.article.create({
+      data: {
+        title: articleData.title,
+        titleZh: articleData.titleZh,
+        content: articleData.content,
+        contentZh: articleData.contentZh,
+        level: articleData.level,
+        gradeLevel: articleData.gradeLevel,
+        topic: articleData.topic,
+        category: articleData.category,
+        authorId: teacher.id,
+        isPublished: true,
+      },
+    });
+
+    for (const wordData of articleData.words) {
+      await prisma.word.create({
+        data: { ...wordData, articleId: article.id },
+      });
+    }
+
+    for (const exerciseData of articleData.exercises) {
+      await prisma.exercise.create({
+        data: { ...exerciseData, articleId: article.id },
+      });
+    }
+
+    console.log(
+      `  ✅ 建立進階文章：${article.title} (Lv.${articleData.gradeLevel}, ${articleData.words.length} 單字, ${articleData.exercises.length} 練習題)`
+    );
+  }
+
   // Create sample practice records for demo
   const articles = await prisma.article.findMany();
   for (const student of students) {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) {
       const article = articles[Math.floor(Math.random() * articles.length)];
+      const types = ["speaking", "reading", "vocabulary", "writing"];
       await prisma.practiceRecord.create({
         data: {
           studentId: student.id,
           articleId: article.id,
-          type: ["speaking", "reading", "vocabulary"][i % 3],
+          type: types[i % types.length],
           score: Math.floor(Math.random() * 40) + 60,
           accuracy: Math.floor(Math.random() * 30) + 70,
           fluency: Math.floor(Math.random() * 30) + 65,
@@ -139,9 +179,31 @@ async function main() {
   }
   console.log("  ✅ 建立範例練習紀錄");
 
+  // Create sample achievements for first student
+  if (students.length > 0) {
+    await prisma.achievement.create({
+      data: {
+        studentId: students[0].id,
+        badge: "first_speaking",
+        title: "初學者",
+        icon: "🌟",
+      },
+    });
+    await prisma.achievement.create({
+      data: {
+        studentId: students[0].id,
+        badge: "streak_3",
+        title: "連續 3 天",
+        icon: "🔥",
+      },
+    });
+    console.log("  ✅ 建立範例徽章");
+  }
+
   console.log("\n🎉 Seed 完成！");
   console.log(`   老師帳號：${seedTeacher.email} / ${seedTeacher.password}`);
   console.log(`   學生帳號：student1 / 123456`);
+  console.log(`   共 ${seedArticles.length + seedArticlesAdvanced.length} 篇文章 (Level 1-6)`);
 }
 
 main()

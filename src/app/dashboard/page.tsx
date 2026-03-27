@@ -26,30 +26,75 @@ interface DashboardData {
   }>;
 }
 
+interface StatsData {
+  points: number;
+  streak: number;
+  level: number;
+  levelTitle: string;
+  nextLevelPoints: number;
+  levelProgress: number;
+  recentAchievements: Array<{
+    badge: string;
+    title: string;
+    icon: string;
+  }>;
+}
+
+interface DailyMission {
+  id: string;
+  missionType: string;
+  description: string;
+  completed: boolean;
+  points: number;
+}
+
 export default function DashboardPage() {
   const { data: session } = useSession();
   const user = session?.user as any;
   const [data, setData] = useState<DashboardData | null>(null);
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [missions, setMissions] = useState<DailyMission[]>([]);
 
   useEffect(() => {
-    fetchDashboard();
+    fetchAll();
   }, []);
 
-  async function fetchDashboard() {
+  async function fetchAll() {
     try {
-      const res = await fetch("/api/progress/dashboard");
-      if (res.ok) {
-        setData(await res.json());
+      const [dashRes, statsRes, missionRes] = await Promise.all([
+        fetch("/api/progress/dashboard"),
+        fetch("/api/gamification/stats"),
+        fetch("/api/gamification/daily-missions"),
+      ]);
+
+      if (dashRes.ok) setData(await dashRes.json());
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (missionRes.ok) {
+        const m = await missionRes.json();
+        setMissions(m.missions || []);
       }
+
+      // 背景檢查徽章
+      fetch("/api/gamification/check", { method: "POST" });
     } catch {
-      // Use fallback data
+      // fallback
     }
   }
+
+  const missionIcon = (type: string) => {
+    switch (type) {
+      case "read_article": return "📖";
+      case "vocabulary_10": return "✏️";
+      case "speaking_1": return "🎤";
+      case "writing_1": return "✍️";
+      default: return "📝";
+    }
+  };
 
   return (
     <StudentLayout>
       {/* 問候語 */}
-      <div className="mb-6">
+      <div className="mb-4">
         <div className="flex items-center gap-3 mb-2">
           <span className="text-5xl animate-wiggle">🐱</span>
           <div>
@@ -61,113 +106,159 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 連續天數 */}
+      {/* 等級 & 積分卡 */}
       <div className="card-kid bg-gradient-to-r from-accent-400 to-accent-500 text-white mb-4 !border-accent-400">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-2">
           <div>
-            <p className="text-sm opacity-90">連續練習</p>
-            <p className="text-3xl font-black">{user?.streak || 0} 天 🔥</p>
+            <p className="text-xs opacity-90">
+              Lv.{stats?.level || 1} {stats?.levelTitle || "新手村民"}
+            </p>
+            <p className="text-3xl font-black">⭐ {stats?.points ?? user?.points ?? 0}</p>
           </div>
           <div className="text-right">
-            <p className="text-sm opacity-90">累計星星</p>
-            <p className="text-3xl font-black">⭐ {user?.points || 0}</p>
+            <p className="text-xs opacity-90">連續練習</p>
+            <p className="text-3xl font-black">{stats?.streak ?? user?.streak ?? 0} 天 🔥</p>
           </div>
         </div>
+        {stats && (
+          <div>
+            <div className="flex justify-between text-xs opacity-80 mb-1">
+              <span>升級進度</span>
+              <span>{stats.nextLevelPoints} 分升級</span>
+            </div>
+            <div className="w-full bg-white/30 rounded-full h-2">
+              <div
+                className="h-2 rounded-full bg-white transition-all duration-1000"
+                style={{ width: `${stats.levelProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 今日任務 */}
+      {/* 最近獲得的徽章 */}
+      {stats?.recentAchievements && stats.recentAchievements.length > 0 && (
+        <Link href="/achievements" className="card-kid mb-4 block hover:border-kid-purple">
+          <p className="text-xs text-gray-500 font-bold mb-2">🎖️ 最近獲得</p>
+          <div className="flex gap-3">
+            {stats.recentAchievements.slice(0, 4).map((a) => (
+              <div key={a.badge} className="text-center">
+                <span className="text-2xl block">{a.icon}</span>
+                <p className="text-xs text-gray-500 mt-0.5">{a.title}</p>
+              </div>
+            ))}
+            <div className="flex items-center text-xs text-primary-500 font-bold ml-auto">
+              查看全部 →
+            </div>
+          </div>
+        </Link>
+      )}
+
+      {/* 每日任務 */}
       <div className="mb-6">
-        <h2 className="text-kid-lg font-black text-gray-700 mb-3">
-          📝 今日任務
-        </h2>
-        <div className="space-y-3">
-          {data?.todayTasks && data.todayTasks.length > 0 ? (
-            data.todayTasks.map((task) => (
+        <h2 className="text-kid-lg font-black text-gray-700 mb-3">🎯 每日任務</h2>
+        <div className="space-y-2">
+          {missions.length > 0 ? (
+            missions.map((m) => (
               <div
-                key={task.id}
+                key={m.id}
                 className={cn(
-                  "card-kid flex items-center gap-3",
-                  task.completed && "opacity-60"
+                  "card-kid flex items-center gap-3 !py-3",
+                  m.completed && "opacity-60"
                 )}
               >
-                <span className="text-2xl">
-                  {task.completed
-                    ? "✅"
-                    : task.type === "READING"
-                    ? "📖"
-                    : task.type === "SPEAKING"
-                    ? "🎤"
-                    : "✏️"}
-                </span>
+                <span className="text-2xl">{m.completed ? "✅" : missionIcon(m.missionType)}</span>
                 <div className="flex-1">
-                  <p className="font-bold text-kid-sm">{task.title}</p>
-                  <p className="text-xs text-gray-400">
-                    截止：{task.dueDate}
-                  </p>
+                  <p className="font-bold text-kid-sm">{m.description}</p>
                 </div>
-                {task.completed ? (
-                  <span className="text-success-500 font-bold text-sm">
-                    已完成
-                  </span>
+                {m.completed ? (
+                  <span className="text-success-500 font-bold text-xs">已完成</span>
                 ) : (
-                  <span className="text-accent-500 font-bold text-sm">
-                    待完成
+                  <span className="text-xs bg-accent-100 text-accent-600 px-2 py-1 rounded-full font-bold">
+                    +{m.points} ⭐
                   </span>
                 )}
               </div>
             ))
           ) : (
-            <div className="card-kid text-center py-6">
-              <span className="text-4xl mb-2 block">🎉</span>
-              <p className="text-kid-sm text-gray-500">
-                今天沒有指派任務，自由練習吧！
-              </p>
-            </div>
+            // fallback: 用舊的 todayTasks
+            data?.todayTasks && data.todayTasks.length > 0 ? (
+              data.todayTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className={cn(
+                    "card-kid flex items-center gap-3 !py-3",
+                    task.completed && "opacity-60"
+                  )}
+                >
+                  <span className="text-2xl">
+                    {task.completed
+                      ? "✅"
+                      : task.type === "READING"
+                      ? "📖"
+                      : task.type === "SPEAKING"
+                      ? "🎤"
+                      : "✏️"}
+                  </span>
+                  <div className="flex-1">
+                    <p className="font-bold text-kid-sm">{task.title}</p>
+                    <p className="text-xs text-gray-400">截止：{task.dueDate}</p>
+                  </div>
+                  {task.completed ? (
+                    <span className="text-success-500 font-bold text-sm">已完成</span>
+                  ) : (
+                    <span className="text-accent-500 font-bold text-sm">待完成</span>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="card-kid text-center py-4">
+                <span className="text-3xl mb-2 block">🎉</span>
+                <p className="text-kid-sm text-gray-500">任務載入中...</p>
+              </div>
+            )
           )}
         </div>
       </div>
 
       {/* 快速開始 */}
       <div className="mb-6">
-        <h2 className="text-kid-lg font-black text-gray-700 mb-3">
-          🚀 快速開始
-        </h2>
-        <div className="grid grid-cols-3 gap-3">
+        <h2 className="text-kid-lg font-black text-gray-700 mb-3">🚀 快速開始</h2>
+        <div className="grid grid-cols-4 gap-2">
           <Link
             href="/articles"
-            className="card-kid text-center py-5 hover:border-primary-300 !p-3"
+            className="card-kid text-center py-4 hover:border-primary-300 !p-2"
           >
-            <span className="text-4xl block mb-2">📖</span>
-            <span className="text-kid-sm font-bold text-primary-600">
-              閱讀
-            </span>
+            <span className="text-3xl block mb-1">📖</span>
+            <span className="text-xs font-bold text-primary-600">閱讀</span>
           </Link>
           <Link
             href="/vocabulary"
-            className="card-kid text-center py-5 hover:border-success-300 !p-3"
+            className="card-kid text-center py-4 hover:border-success-300 !p-2"
           >
-            <span className="text-4xl block mb-2">✏️</span>
-            <span className="text-kid-sm font-bold text-success-600">
-              單字
-            </span>
+            <span className="text-3xl block mb-1">✏️</span>
+            <span className="text-xs font-bold text-success-600">單字</span>
           </Link>
           <Link
             href="/speaking"
-            className="card-kid text-center py-5 hover:border-accent-300 !p-3"
+            className="card-kid text-center py-4 hover:border-accent-300 !p-2"
           >
-            <span className="text-4xl block mb-2">🎤</span>
-            <span className="text-kid-sm font-bold text-accent-600">
-              口說
-            </span>
+            <span className="text-3xl block mb-1">🎤</span>
+            <span className="text-xs font-bold text-accent-600">口說</span>
+          </Link>
+          <Link
+            href="/writing"
+            className="card-kid text-center py-4 hover:border-kid-purple !p-2"
+          >
+            <span className="text-3xl block mb-1">✍️</span>
+            <span className="text-xs font-bold text-purple-600">寫作</span>
           </Link>
         </div>
       </div>
 
       {/* 本週進度 */}
       <div className="mb-6">
-        <h2 className="text-kid-lg font-black text-gray-700 mb-3">
-          📊 本週進度
-        </h2>
+        <h2 className="text-kid-lg font-black text-gray-700 mb-3">📊 本週進度</h2>
         <div className="card-kid">
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
@@ -194,9 +285,7 @@ export default function DashboardPage() {
 
       {/* 推薦文章 */}
       <div>
-        <h2 className="text-kid-lg font-black text-gray-700 mb-3">
-          📚 推薦文章
-        </h2>
+        <h2 className="text-kid-lg font-black text-gray-700 mb-3">📚 推薦文章</h2>
         <div className="space-y-2">
           {(data?.recentArticles || defaultArticles).map((article) => (
             <Link

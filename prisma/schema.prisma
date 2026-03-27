@@ -36,6 +36,8 @@ model User {
   achievements      Achievement[]
   pointHistory      PointHistory[]
   assignmentSubmissions AssignmentSubmission[]
+  writingSubmissions WritingSubmission[]
+  dailyMissions     DailyMission[]
 
   // Teacher relations
   teachingClasses   Class[]       @relation("TeacherClasses")
@@ -83,6 +85,9 @@ enum ArticleLevel {
   LEVEL1
   LEVEL2
   LEVEL3
+  LEVEL4
+  LEVEL5
+  LEVEL6
 }
 
 model Article {
@@ -94,6 +99,7 @@ model Article {
   level        ArticleLevel @default(LEVEL1)
   gradeLevel   Int          @default(1)
   topic        String?      // 主題分類
+  category     String?      // 分類：daily_life, nature, technology, culture
   audioUrl     String?      // 朗讀音檔 URL
   imageUrl     String?      // 封面圖片
   isPublished  Boolean      @default(true)
@@ -151,6 +157,7 @@ enum AssignmentType {
   READING
   VOCABULARY
   SPEAKING
+  WRITING
   MIXED
 }
 
@@ -204,7 +211,7 @@ model PracticeRecord {
   id          String   @id @default(cuid())
   studentId   String
   articleId   String?
-  type        String   // reading, speaking, vocabulary
+  type        String   // reading, speaking, vocabulary, writing
   audioUrl    String?  // 學生錄音
   transcript  String?  // 語音轉文字
   score       Float?   // 總分 0-100
@@ -237,6 +244,28 @@ model SpellingRecord {
   @@map("spelling_records")
 }
 
+// ===== 寫作練習 =====
+
+model WritingSubmission {
+  id            String   @id @default(cuid())
+  studentId     String
+  prompt        String   // 寫作題目
+  promptZh      String?  // 題目中文說明
+  content       String   // 學生寫的內容
+  correctedText String?  // 修正後的版本
+  errors        String?  // JSON: 錯誤列表
+  score         Float?   // 整體分數 0-100
+  grammarScore  Float?   // 文法正確性
+  structureScore Float?  // 句子結構
+  vocabScore    Float?   // 詞彙使用
+  feedback      String?  // 綜合回饋
+  createdAt     DateTime @default(now())
+
+  student       User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("writing_submissions")
+}
+
 // ===== 遊戲化 =====
 
 model Achievement {
@@ -253,11 +282,27 @@ model Achievement {
   @@map("achievements")
 }
 
+model DailyMission {
+  id          String   @id @default(cuid())
+  userId      String
+  date        DateTime @db.Date
+  missionType String   // read_article, vocabulary_10, speaking_3, writing_1
+  description String
+  completed   Boolean  @default(false)
+  points      Int      @default(5)
+  createdAt   DateTime @default(now())
+
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date, missionType])
+  @@map("daily_missions")
+}
+
 model PointHistory {
   id        String   @id @default(cuid())
   studentId String
   amount    Int
-  source    String   // practice, streak, achievement, daily_login
+  source    String   // practice, streak, achievement, daily_login, writing, mission
   detail    String?
   createdAt DateTime @default(now())
 
