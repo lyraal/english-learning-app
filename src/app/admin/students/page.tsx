@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { formatRelativeTime } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const router = useRouter();
   const [formData, setFormData] = useState({ name: "", username: "", password: "123456", classId: "" });
   const [classes, setClasses] = useState<Array<{ id: string; name: string }>>([]);
 
@@ -119,7 +121,7 @@ export default function StudentsPage() {
                 <tr><td colSpan={6} className="text-center py-8 text-gray-400">尚無學生</td></tr>
               ) : (
                 students.map((s) => (
-                  <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50">
+                  <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/admin/students/${s.id}`)}>
                     <td className="px-4 py-3">
                       <div>
                         <p className="font-medium text-gray-800">{s.name}</p>

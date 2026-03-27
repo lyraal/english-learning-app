@@ -46,14 +46,27 @@ export default function ReportsPage() {
       <div className="max-w-6xl">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-800">📈 學生報告</h1>
-          <select
-            value={selectedClass}
-            onChange={(e) => setSelectedClass(e.target.value)}
-            className="input-admin w-48"
-          >
-            <option value="ALL">全部班級</option>
-            {classes.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-          </select>
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
+              className="input-admin w-48"
+            >
+              <option value="ALL">全部班級</option>
+              {classes.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+            <button
+              onClick={() => {
+                const classId = selectedClass === "ALL"
+                  ? "all"
+                  : classes.find((c) => c.name === selectedClass)?.id || "all";
+                window.open(`/api/admin/export/class/${classId}`, "_blank");
+              }}
+              className="btn-admin-primary flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <span>📥</span> 匯出成績 CSV
+            </button>
+          </div>
         </div>
 
         {/* Summary cards */}
