@@ -9,6 +9,7 @@ const navItems = [
   { href: "/articles", icon: "📖", label: "閱讀" },
   { href: "/vocabulary", icon: "✏️", label: "單字" },
   { href: "/speaking", icon: "🎤", label: "口說" },
+  { href: "/conversation", icon: "💬", label: "對話" },
   { href: "/writing", icon: "✍️", label: "寫作" },
   { href: "/achievements", icon: "🏆", label: "成就" },
 ];
