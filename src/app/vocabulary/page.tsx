@@ -16,6 +16,15 @@ interface Word {
 
 type GameType = "spelling" | "picture_match" | "drag_letters" | "picture_speak";
 
+function shuffleArray<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 // Confetti component
 function Confetti() {
   const emojis = ["🌟", "⭐", "✨", "🎉", "🎊", "💫", "🏆", "👏", "🎯", "💯", "🌈", "🎵"];
@@ -84,13 +93,21 @@ function VocabularyPageContent() {
         : "/api/vocabulary";
       const res = await fetch(url);
       if (res.ok) {
-        const data = await res.json();
-        setWords(data.length > 0 ? data : sampleWords);
+        let data = await res.json();
+        if (data.length > 0) {
+          // 每組練習限制 10 題，隨機抽取
+          if (data.length > 10) {
+            data = shuffleArray(data).slice(0, 10);
+          }
+          setWords(data);
+        } else {
+          setWords(sampleWords.slice(0, 10));
+        }
       } else {
-        setWords(sampleWords);
+        setWords(sampleWords.slice(0, 10));
       }
     } catch {
-      setWords(sampleWords);
+      setWords(sampleWords.slice(0, 10));
     } finally {
       setLoading(false);
     }
