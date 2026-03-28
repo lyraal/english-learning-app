@@ -285,6 +285,141 @@ export default function StudentDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* 家長管理 */}
+      <ParentManager studentId={params.id as string} />
     </AdminLayout>
+  );
+}
+
+// 家長管理組件
+function ParentManager({ studentId }: { studentId: string }) {
+  const [parents, setParents] = useState<Array<{ id: string; parent: { id: string; name: string; username: string } }>>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [mode, setMode] = useState<"search" | "create">("search");
+  const [searchUsername, setSearchUsername] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => { fetchParents(); }, [studentId]);
+
+  async function fetchParents() {
+    try {
+      const res = await fetch(`/api/admin/students/${studentId}/parent`);
+      if (res.ok) {
+        const data = await res.json();
+        setParents(data.parents || []);
+      }
+    } catch {}
+  }
+
+  async function handleBind() {
+    setError(""); setSuccess(""); setLoading(true);
+    try {
+      const body = mode === "search"
+        ? { parentUsername: searchUsername }
+        : { newParentName: newName, newParentPassword: newPassword };
+
+      const res = await fetch(`/api/admin/students/${studentId}/parent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess(mode === "create" ? `家長帳號已建立（帳號：${data.link?.parent?.username}）並綁定成功` : "綁定成功");
+        setShowForm(false);
+        setSearchUsername(""); setNewName(""); setNewPassword("");
+        fetchParents();
+      } else {
+        setError(data.error || "操作失敗");
+      }
+    } catch { setError("操作失敗"); }
+    finally { setLoading(false); }
+  }
+
+  async function handleUnbind(parentChildId: string) {
+    if (!confirm("確定要解除此家長的綁定嗎？")) return;
+    try {
+      const res = await fetch(`/api/admin/students/${studentId}/parent`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentChildId }),
+      });
+      if (res.ok) { fetchParents(); setSuccess("已解除綁定"); }
+    } catch {}
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-gray-800">👨‍👩‍👧 家長管理</h2>
+        <button onClick={() => setShowForm(!showForm)} className="text-sm bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600">
+          + 綁定家長
+        </button>
+      </div>
+
+      {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-3">{error}</div>}
+      {success && <div className="bg-green-50 text-green-600 text-sm p-3 rounded-lg mb-3">{success}</div>}
+
+      {/* 已綁定的家長 */}
+      {parents.length > 0 ? (
+        <div className="space-y-2 mb-4">
+          {parents.map((p) => (
+            <div key={p.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+              <div>
+                <p className="font-medium text-gray-800">👤 {p.parent.name}</p>
+                <p className="text-xs text-gray-400">帳號：{p.parent.username}</p>
+              </div>
+              <button onClick={() => handleUnbind(p.id)} className="text-xs text-red-500 hover:text-red-700">
+                解除綁定
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400 mb-4">尚未綁定家長帳號</p>
+      )}
+
+      {/* 綁定表單 */}
+      {showForm && (
+        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+          <div className="flex gap-2 mb-4">
+            <button onClick={() => setMode("search")} className={`px-3 py-1 rounded text-sm ${mode === "search" ? "bg-blue-500 text-white" : "bg-white text-gray-600 border"}`}>
+              搜尋現有帳號
+            </button>
+            <button onClick={() => setMode("create")} className={`px-3 py-1 rounded text-sm ${mode === "create" ? "bg-blue-500 text-white" : "bg-white text-gray-600 border"}`}>
+              建立新帳號
+            </button>
+          </div>
+
+          {mode === "search" ? (
+            <div className="space-y-3">
+              <input type="text" placeholder="輸入家長帳號 (username)" value={searchUsername} onChange={(e) => setSearchUsername(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg text-sm" />
+              <button onClick={handleBind} disabled={!searchUsername || loading}
+                className="w-full bg-blue-500 text-white py-2 rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50">
+                {loading ? "處理中..." : "綁定"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <input type="text" placeholder="家長姓名" value={newName} onChange={(e) => setNewName(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg text-sm" />
+              <input type="password" placeholder="設定密碼" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg text-sm" />
+              <button onClick={handleBind} disabled={!newName || !newPassword || loading}
+                className="w-full bg-green-500 text-white py-2 rounded-lg text-sm hover:bg-green-600 disabled:opacity-50">
+                {loading ? "處理中..." : "建立帳號並綁定"}
+              </button>
+              <p className="text-xs text-gray-400">系統會自動產生帳號（格式：parent_時間戳），家長可用此帳號登入查看孩子進度</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
