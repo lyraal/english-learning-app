@@ -53,6 +53,41 @@ export async function PATCH(
       );
     }
 
+    if (action === "update-profile") {
+      const { name, username } = body;
+      const updateData: any = {};
+
+      if (name && name.trim()) {
+        updateData.name = name.trim();
+      }
+
+      if (username !== undefined) {
+        const trimmed = username?.trim();
+        if (trimmed) {
+          // 檢查 username 是否已被其他人使用
+          const existing = await prisma.user.findFirst({
+            where: { username: trimmed, id: { not: id } },
+          });
+          if (existing) {
+            return NextResponse.json({ error: "此帳號名稱已被使用" }, { status: 409 });
+          }
+          updateData.username = trimmed;
+        }
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json({ error: "請提供要修改的欄位" }, { status: 400 });
+      }
+
+      const updated = await prisma.user.update({
+        where: { id },
+        data: updateData,
+        select: { id: true, name: true, username: true },
+      });
+
+      return NextResponse.json({ message: "已更新", user: updated });
+    }
+
     if (action === "reset-password") {
       const { newPassword } = body;
       if (!newPassword || newPassword.length < 4) {

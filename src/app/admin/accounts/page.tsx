@@ -53,6 +53,13 @@ export default function AccountsPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetMsg, setResetMsg] = useState("");
 
+  // 編輯帳號 modal
+  const [editTarget, setEditTarget] = useState<Account | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
+
   // 操作訊息
   const [actionMsg, setActionMsg] = useState("");
 
@@ -149,6 +156,43 @@ export default function AccountsPage() {
   };
 
   // 停用/啟用
+  const openEditModal = (account: Account) => {
+    setEditTarget(account);
+    setEditName(account.name);
+    setEditUsername(account.username || "");
+    setEditError("");
+  };
+
+  const handleEditProfile = async () => {
+    if (!editTarget) return;
+    setEditLoading(true);
+    setEditError("");
+    try {
+      const res = await fetch(`/api/admin/accounts/${editTarget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-profile",
+          name: editName,
+          username: editUsername,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEditTarget(null);
+        setActionMsg("已更新帳號資料");
+        fetchAccounts();
+        setTimeout(() => setActionMsg(""), 3000);
+      } else {
+        setEditError(data.error || "更新失敗");
+      }
+    } catch {
+      setEditError("更新失敗");
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const handleToggleStatus = async (account: Account) => {
     try {
       const res = await fetch(`/api/admin/accounts/${account.id}`, {
@@ -293,6 +337,12 @@ export default function AccountsPage() {
                     <td className="px-4 py-3 text-gray-500">{formatDate(account.createdAt)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(account)}
+                          className="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+                        >
+                          編輯
+                        </button>
                         <button
                           onClick={() => setResetTarget(account)}
                           className="px-3 py-1.5 text-xs bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors font-medium"
@@ -444,6 +494,58 @@ export default function AccountsPage() {
                   className="flex-1 py-2 bg-yellow-500 text-white rounded-lg text-sm font-semibold hover:bg-yellow-600 disabled:opacity-50 transition-colors"
                 >
                   {resetLoading ? "重設中..." : "確認重設"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 編輯帳號 Modal */}
+      {editTarget && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">編輯帳號</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              修改 <span className="font-semibold text-gray-700">{editTarget.name}</span> 的資料
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">姓名</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  placeholder="輸入姓名"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">帳號（username）</label>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  placeholder="輸入帳號名稱"
+                />
+              </div>
+              {editError && (
+                <p className="text-sm text-red-500">{editError}</p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditTarget(null)}
+                  className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleEditProfile}
+                  disabled={editLoading || (!editName.trim() && !editUsername.trim())}
+                  className="flex-1 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                >
+                  {editLoading ? "更新中..." : "確認修改"}
                 </button>
               </div>
             </div>
