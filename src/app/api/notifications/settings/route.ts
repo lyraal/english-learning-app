@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-export interface NotificationPrefs {
+interface NotificationPrefs {
   dailySummary: boolean;
   badge: boolean;
   streak: boolean;
@@ -13,7 +13,7 @@ export interface NotificationPrefs {
   inactive: boolean;
 }
 
-export const DEFAULT_PREFS: NotificationPrefs = {
+const DEFAULT_PREFS: NotificationPrefs = {
   dailySummary: true,
   badge: true,
   streak: true,
