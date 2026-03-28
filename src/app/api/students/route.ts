@@ -17,6 +17,9 @@ export async function GET() {
       where: { role: "STUDENT" },
       include: {
         classEnrollments: { include: { class: { select: { name: true } } } },
+        childOf: {
+          include: { parent: { select: { id: true, name: true, username: true } } },
+        },
         _count: { select: { practiceRecords: true } },
       },
       orderBy: { createdAt: "desc" },

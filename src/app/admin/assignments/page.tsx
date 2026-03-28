@@ -63,22 +63,31 @@ export default function AssignmentsPage() {
 
   async function fetchAssignments() {
     try {
-      const res = await fetch("/api/assignments");
-      if (res.ok) setAssignments(await res.json());
+      const res = await fetch("/api/admin/assignments");
+      if (res.ok) {
+        const data = await res.json();
+        setAssignments(Array.isArray(data) ? data : []);
+      }
     } catch {} finally { setLoading(false); }
   }
 
   async function fetchClasses() {
     try {
       const res = await fetch("/api/classes?includeStudents=true");
-      if (res.ok) setClasses(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setClasses(Array.isArray(data) ? data : []);
+      }
     } catch {}
   }
 
   async function fetchArticles() {
     try {
       const res = await fetch("/api/articles");
-      if (res.ok) setArticles(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setArticles(Array.isArray(data) ? data : []);
+      }
     } catch {}
   }
 
@@ -154,13 +163,16 @@ export default function AssignmentsPage() {
         }),
       });
       if (res.ok) {
+        const result = await res.json();
+        alert(result.message || "指派成功！");
         resetForm();
         fetchAssignments();
       } else {
-        alert("指派失敗，請重試");
+        const err = await res.json().catch(() => ({ error: "未知錯誤" }));
+        alert(`指派失敗：${err.error || "請重試"}`);
       }
     } catch {
-      alert("指派失敗，請重試");
+      alert("指派失敗：網路錯誤，請重試");
     } finally {
       setSubmitting(false);
     }

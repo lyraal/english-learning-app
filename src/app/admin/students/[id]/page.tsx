@@ -41,6 +41,8 @@ interface StudentDetail {
   badgeProgress: Array<{
     badge: string;
     title: string;
+    icon?: string;
+    description?: string;
     earned: boolean;
     earnedAt: string | null;
   }>;
@@ -258,7 +260,7 @@ export default function StudentDetailPage() {
         {/* Badge Progress */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <h2 className="text-lg font-bold text-gray-800 mb-4">🏆 徽章收集進度</h2>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-5 gap-3">
             {badgeProgress.map((b) => (
               <div
                 key={b.badge}
@@ -268,10 +270,13 @@ export default function StudentDetailPage() {
                     : "bg-gray-50 border-gray-100 opacity-50"
                 }`}
               >
-                <span className="text-2xl block mb-1">
-                  {b.earned ? "🏅" : "🔒"}
+                <span className={`text-2xl block mb-1 ${!b.earned ? "grayscale" : ""}`}>
+                  {b.icon || (b.earned ? "🏅" : "🔒")}
                 </span>
                 <p className="text-sm font-medium text-gray-700">{b.title}</p>
+                {b.description && (
+                  <p className="text-xs text-gray-400 mt-0.5">{b.description}</p>
+                )}
                 {b.earned && b.earnedAt && (
                   <p className="text-xs text-gray-400 mt-1">
                     {formatDate(b.earnedAt)}
@@ -284,10 +289,12 @@ export default function StudentDetailPage() {
             已獲得 {badgeProgress.filter((b) => b.earned).length} / {badgeProgress.length} 個徽章
           </p>
         </div>
-      </div>
 
-      {/* 家長管理 */}
-      <ParentManager studentId={params.id as string} />
+        {/* 家長管理 */}
+        <div className="mt-6">
+          <ParentManager studentId={params.id as string} />
+        </div>
+      </div>
     </AdminLayout>
   );
 }

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { ACHIEVEMENTS } from "@/lib/gamification";
 
 export async function GET(
   req: NextRequest,
@@ -133,25 +134,14 @@ export async function GET(
       earnedAt: a.earnedAt.toISOString(),
     }));
 
-    // All possible badges for progress tracking
-    const allBadges = [
-      { badge: "streak_3", title: "連續3天" },
-      { badge: "streak_7", title: "連續7天" },
-      { badge: "streak_30", title: "連續30天" },
-      { badge: "perfect_score", title: "滿分達人" },
-      { badge: "spelling_king", title: "拼字王" },
-      { badge: "speaking_star", title: "口說之星" },
-      { badge: "reading_master", title: "閱讀大師" },
-      { badge: "writing_pro", title: "寫作高手" },
-      { badge: "first_practice", title: "初次練習" },
-      { badge: "practice_50", title: "練習50次" },
-      { badge: "practice_100", title: "練習100次" },
-    ];
-
-    const badgeProgress = allBadges.map((b) => ({
-      ...b,
-      earned: badges.some((a) => a.badge === b.badge),
-      earnedAt: badges.find((a) => a.badge === b.badge)?.earnedAt || null,
+    // Use ACHIEVEMENTS from gamification.ts for consistent badge definitions
+    const badgeProgress = ACHIEVEMENTS.map((def) => ({
+      badge: def.badge,
+      title: def.title,
+      icon: def.icon,
+      description: def.description,
+      earned: badges.some((a) => a.badge === def.badge),
+      earnedAt: badges.find((a) => a.badge === def.badge)?.earnedAt || null,
     }));
 
     return NextResponse.json({

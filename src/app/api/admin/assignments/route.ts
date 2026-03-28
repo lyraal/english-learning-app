@@ -8,7 +8,8 @@ import prisma from "@/lib/prisma";
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any).role === "STUDENT") {
+    const userRole = (session?.user as any)?.role;
+    if (!session || (userRole !== "TEACHER" && userRole !== "ADMIN")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
     const { title, description, types, classIds, studentIds, articleId, dueDate } = data;
 
     if (!title || !types || types.length === 0) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return NextResponse.json({ error: "請填寫作業名稱並選擇至少一種類型" }, { status: 400 });
     }
 
     const createdAssignments = [];
@@ -25,9 +26,12 @@ export async function POST(req: NextRequest) {
     // Mode 1: Assign by class - create one assignment per type per class
     if (classIds && classIds.length > 0) {
       for (const classId of classIds) {
-        // Verify teacher owns this class
+        // Verify teacher owns this class (ADMIN can access any class)
+        const classWhere = userRole === "ADMIN"
+          ? { id: classId }
+          : { id: classId, teacherId };
         const cls = await prisma.class.findFirst({
-          where: { id: classId, teacherId },
+          where: classWhere,
           include: { students: true },
         });
         if (!cls) continue;
@@ -110,6 +114,35 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Batch assignment error:", error);
     return NextResponse.json({ error: "Failed to create assignments" }, { status: 500 });
+  }
+}
+
+// GET: 取得老師建立的所有作業
+export async function GET() {
+  try {
+    const session = await getServerSession(authOptions);
+    const userRole = (session?.user as any)?.role;
+    if (!session || (userRole !== "TEACHER" && userRole !== "ADMIN")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const teacherId = (session.user as any).id;
+    const assignmentWhere = userRole === "ADMIN" ? {} : { teacherId };
+
+    const assignments = await prisma.assignment.findMany({
+      where: assignmentWhere,
+      include: {
+        class: { select: { name: true } },
+        article: { select: { title: true } },
+        _count: { select: { submissions: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json(assignments);
+  } catch (error) {
+    console.error("Fetch assignments error:", error);
+    return NextResponse.json({ error: "Failed to fetch assignments" }, { status: 500 });
   }
 }
 

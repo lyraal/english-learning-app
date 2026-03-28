@@ -13,8 +13,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const includeStudents = searchParams.get("includeStudents") === "true";
 
-    const where = (session.user as any).role === "STUDENT"
+    const userRole = (session.user as any).role;
+    const where = userRole === "STUDENT"
       ? { students: { some: { studentId: (session.user as any).id } } }
+      : userRole === "ADMIN"
+      ? {}
       : { teacherId: (session.user as any).id };
 
     const classes = await prisma.class.findMany({

@@ -14,6 +14,7 @@ interface Student {
   lastActiveAt: string | null;
   createdAt: string;
   classEnrollments: Array<{ class: { name: string } }>;
+  childOf: Array<{ parent: { id: string; name: string; username: string } }>;
   _count: { practiceRecords: number };
 }
 
@@ -108,6 +109,7 @@ export default function StudentsPage() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">學生</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">班級</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">家長</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">練習次數</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">星星</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">連續天數</th>
@@ -116,9 +118,9 @@ export default function StudentsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-8 text-gray-400">載入中...</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-gray-400">載入中...</td></tr>
               ) : students.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-gray-400">尚無學生</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-gray-400">尚無學生</td></tr>
               ) : (
                 students.map((s) => (
                   <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/admin/students/${s.id}`)}>
@@ -130,6 +132,11 @@ export default function StudentsPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {s.classEnrollments.map((e) => e.class.name).join(", ") || "-"}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {s.childOf && s.childOf.length > 0
+                        ? s.childOf.map((p) => p.parent.name).join(", ")
+                        : <span className="text-gray-300 text-xs">未綁定</span>}
                     </td>
                     <td className="px-4 py-3 text-center font-medium">{s._count.practiceRecords}</td>
                     <td className="px-4 py-3 text-center font-medium text-yellow-600">⭐ {s.points}</td>

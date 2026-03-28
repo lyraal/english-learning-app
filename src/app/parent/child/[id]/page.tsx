@@ -32,6 +32,7 @@ interface ChildProgress {
     total: number;
     unlocked: number;
     list: { badge: string; title: string; icon: string | null; earnedAt: string }[];
+    all?: { badge: string; title: string; icon: string; description: string; earned: boolean; earnedAt: string | null }[];
   };
 }
 
@@ -206,9 +207,28 @@ export default function ChildDetailPage() {
             {badges.unlocked} / {badges.total}
           </span>
         </div>
-        {badges.list.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-4">尚未獲得徽章</p>
-        ) : (
+        {badges.all && badges.all.length > 0 ? (
+          <div className="grid grid-cols-3 gap-3">
+            {badges.all.map((b) => (
+              <div
+                key={b.badge}
+                className={`flex flex-col items-center rounded-lg p-3 min-w-[70px] ${
+                  b.earned
+                    ? "bg-amber-50 border border-amber-200"
+                    : "bg-slate-50 border border-slate-100 opacity-50"
+                }`}
+              >
+                <span className={`text-2xl ${b.earned ? "" : "grayscale"}`}>
+                  {b.icon || (b.earned ? "🏅" : "🔒")}
+                </span>
+                <span className={`text-xs mt-1 text-center font-medium ${b.earned ? "text-slate-700" : "text-slate-400"}`}>
+                  {b.title}
+                </span>
+                <span className="text-[10px] text-slate-400 mt-0.5 text-center">{b.description}</span>
+              </div>
+            ))}
+          </div>
+        ) : badges.list.length > 0 ? (
           <div className="flex flex-wrap gap-3">
             {badges.list.map((b) => (
               <div key={b.badge} className="flex flex-col items-center bg-amber-50 rounded-lg p-3 min-w-[70px]">
@@ -217,6 +237,8 @@ export default function ChildDetailPage() {
               </div>
             ))}
           </div>
+        ) : (
+          <p className="text-sm text-slate-400 text-center py-4">尚未獲得徽章</p>
         )}
       </div>
     </div>

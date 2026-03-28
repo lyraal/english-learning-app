@@ -105,6 +105,14 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: "Missing parentChildId" }, { status: 400 });
     }
 
+    // 確認該綁定關係屬於此學生
+    const link = await prisma.parentChild.findFirst({
+      where: { id: parentChildId, childId: params.id },
+    });
+    if (!link) {
+      return NextResponse.json({ error: "找不到此綁定關係" }, { status: 404 });
+    }
+
     await prisma.parentChild.delete({ where: { id: parentChildId } });
 
     return NextResponse.json({ message: "解除綁定成功" });

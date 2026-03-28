@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { ACHIEVEMENTS } from "@/lib/gamification";
 
 export async function GET(
   request: NextRequest,
@@ -100,8 +101,8 @@ export async function GET(
     orderBy: { earnedAt: "desc" },
   });
 
-  // Total possible badges (hardcoded common set)
-  const totalBadges = 10;
+  // Use ACHIEVEMENTS from gamification.ts for consistent badge definitions
+  const earnedBadgeSet = new Set(achievements.map((a) => a.badge));
 
   return NextResponse.json({
     child,
@@ -119,7 +120,7 @@ export async function GET(
       articleTitle: r.article?.titleZh || null,
     })),
     badges: {
-      total: totalBadges,
+      total: ACHIEVEMENTS.length,
       unlocked: achievements.length,
       list: achievements.map((a) => ({
         badge: a.badge,
@@ -127,6 +128,17 @@ export async function GET(
         icon: a.icon,
         earnedAt: a.earnedAt,
       })),
+      all: ACHIEVEMENTS.map((def) => {
+        const earned = achievements.find((a) => a.badge === def.badge);
+        return {
+          badge: def.badge,
+          title: def.title,
+          icon: def.icon,
+          description: def.description,
+          earned: earnedBadgeSet.has(def.badge),
+          earnedAt: earned?.earnedAt || null,
+        };
+      }),
     },
   });
 }
