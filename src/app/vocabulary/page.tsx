@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import StudentLayout from "@/components/student/StudentLayout";
-import { speak } from "@/lib/speech";
+import { speak, startRecording, assessPronunciation } from "@/lib/speech";
 import { getWordEmoji } from "@/lib/word-images";
 
 interface Word {
@@ -208,77 +208,59 @@ function VocabularyPageContent() {
     }
   }
 
-  // Picture-speak: use Web Speech API for recognition
+  // Picture-speak: 使用 Azure Speech Services 錄音 + 發音評估
+  const recordingRef = useRef<any>(null);
+
   async function startListening() {
-    // 先檢查麥克風權限
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => t.stop());
-    } catch (err: any) {
-      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        alert("請允許瀏覽器使用麥克風。點擊網址列左方的鎖頭圖示，開啟麥克風權限後重新整理頁面。");
-      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-        alert("找不到麥克風裝置。請確認麥克風已連接到電腦。");
-      } else {
-        alert(`麥克風錯誤：${err.message || "未知錯誤"}。請確認麥克風已連接。`);
-      }
-      return;
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("你的瀏覽器不支援語音辨識，請使用 Chrome 或 Edge 瀏覽器");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 3;
-
-    setIsListening(true);
     setSpokenText("");
-
-    recognition.onresult = (event: any) => {
-      const results = event.results[0];
-      let matched = false;
-      for (let i = 0; i < results.length; i++) {
-        const transcript = results[i].transcript.toLowerCase().trim();
-        setSpokenText(transcript);
-        if (transcript === currentWord.word.toLowerCase()) {
-          matched = true;
-          break;
-        }
-      }
-      if (matched) {
-        checkAnswer(currentWord.word);
-      } else {
-        setSpokenText(results[0].transcript);
-        checkAnswer(results[0].transcript);
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      setIsListening(false);
-      const errorMsg = event.error === "not-allowed"
-        ? "麥克風權限被拒絕，請在瀏覽器設定中允許使用麥克風"
-        : event.error === "no-speech"
-        ? "沒有偵測到語音，請再試一次"
-        : event.error === "network"
-        ? "網路錯誤，語音辨識需要網路連線"
-        : `語音辨識錯誤：${event.error}`;
-      setSpokenText(errorMsg);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
+    setIsListening(true);
 
     try {
-      recognition.start();
+      const session = await startRecording();
+      recordingRef.current = session;
+
+      // 3 秒後自動停止（單字不需要錄太久）
+      setTimeout(() => {
+        if (recordingRef.current) {
+          stopListening();
+        }
+      }, 3000);
     } catch (err: any) {
       setIsListening(false);
-      alert(`無法啟動語音辨識：${err.message}`);
+      setSpokenText(err.message || "無法啟動錄音");
+    }
+  }
+
+  async function stopListening() {
+    if (!recordingRef.current) return;
+
+    setIsListening(false);
+    setSpokenText("辨識中...");
+
+    try {
+      const audioBlob = await recordingRef.current.stop();
+      recordingRef.current = null;
+
+      // 使用 Azure Pronunciation Assessment 辨識
+      const result = await assessPronunciation(audioBlob, currentWord.word);
+
+      if (result.transcript) {
+        const transcript = result.transcript.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+        setSpokenText(transcript);
+
+        // 檢查是否匹配（完全一致或包含目標單字）
+        const target = currentWord.word.toLowerCase();
+        if (transcript === target || transcript.includes(target)) {
+          checkAnswer(currentWord.word);
+        } else {
+          checkAnswer(transcript);
+        }
+      } else {
+        setSpokenText("沒有偵測到語音，請再試一次");
+      }
+    } catch (err: any) {
+      setSpokenText(err.message || "語音辨識失敗，請再試一次");
+      recordingRef.current = null;
     }
   }
 
@@ -508,16 +490,21 @@ function VocabularyPageContent() {
             <p className="text-sm text-gray-400 mb-6">看圖片，說出英文單字！</p>
 
             <button
-              onClick={startListening}
-              disabled={isListening || feedback !== null}
+              onClick={isListening ? stopListening : startListening}
+              disabled={feedback !== null || spokenText === "辨識中..."}
               className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 transition-all ${
                 isListening
                   ? "bg-red-100 recording-pulse"
+                  : spokenText === "辨識中..."
+                  ? "bg-gray-100"
                   : "bg-accent-100 hover:bg-accent-200 active:scale-95"
               }`}
             >
-              <span className="text-5xl">{isListening ? "🔴" : "🎤"}</span>
+              <span className="text-5xl">{isListening ? "⏹" : spokenText === "辨識中..." ? "⏳" : "🎤"}</span>
             </button>
+            <p className="text-xs text-gray-400 mb-2">
+              {isListening ? "錄音中... 說完後點擊停止（或等 3 秒自動停止）" : spokenText === "辨識中..." ? "Azure 語音辨識中..." : "點擊麥克風開始說話"}
+            </p>
 
             {spokenText && (
               <p className="text-sm text-gray-500 mb-2">
