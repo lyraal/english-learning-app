@@ -209,10 +209,25 @@ function VocabularyPageContent() {
   }
 
   // Picture-speak: use Web Speech API for recognition
-  function startListening() {
+  async function startListening() {
+    // 先檢查麥克風權限
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+    } catch (err: any) {
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        alert("請允許瀏覽器使用麥克風。點擊網址列左方的鎖頭圖示，開啟麥克風權限後重新整理頁面。");
+      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+        alert("找不到麥克風裝置。請確認麥克風已連接到電腦。");
+      } else {
+        alert(`麥克風錯誤：${err.message || "未知錯誤"}。請確認麥克風已連接。`);
+      }
+      return;
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("你的瀏覽器不支援語音辨識，請使用 Chrome 瀏覽器");
+      alert("你的瀏覽器不支援語音辨識，請使用 Chrome 或 Edge 瀏覽器");
       return;
     }
 
@@ -243,15 +258,28 @@ function VocabularyPageContent() {
       }
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event: any) => {
       setIsListening(false);
+      const errorMsg = event.error === "not-allowed"
+        ? "麥克風權限被拒絕，請在瀏覽器設定中允許使用麥克風"
+        : event.error === "no-speech"
+        ? "沒有偵測到語音，請再試一次"
+        : event.error === "network"
+        ? "網路錯誤，語音辨識需要網路連線"
+        : `語音辨識錯誤：${event.error}`;
+      setSpokenText(errorMsg);
     };
 
     recognition.onend = () => {
       setIsListening(false);
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (err: any) {
+      setIsListening(false);
+      alert(`無法啟動語音辨識：${err.message}`);
+    }
   }
 
   if (loading) {
