@@ -53,6 +53,7 @@ export const authOptions: NextAuthOptions = {
           avatar: user.avatar,
           points: user.points,
           streak: user.streak,
+          organizationId: user.organizationId,
         };
       },
     }),
@@ -65,6 +66,7 @@ export const authOptions: NextAuthOptions = {
         token.avatar = (user as any).avatar;
         token.points = (user as any).points;
         token.streak = (user as any).streak;
+        token.organizationId = (user as any).organizationId;
       }
       return token;
     },
@@ -75,6 +77,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).avatar = token.avatar;
         (session.user as any).points = token.points;
         (session.user as any).streak = token.streak;
+        (session.user as any).organizationId = token.organizationId;
       }
       return session;
     },

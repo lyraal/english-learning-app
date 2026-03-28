@@ -8,6 +8,7 @@ declare module "next-auth" {
       avatar: string | null;
       points: number;
       streak: number;
+      organizationId: string | null;
     } & DefaultSession["user"];
   }
 
@@ -16,6 +17,7 @@ declare module "next-auth" {
     avatar: string | null;
     points: number;
     streak: number;
+    organizationId: string | null;
   }
 }
 
@@ -26,5 +28,6 @@ declare module "next-auth/jwt" {
     avatar: string | null;
     points: number;
     streak: number;
+    organizationId: string | null;
   }
 }

@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import StudentLayout from "@/components/student/StudentLayout";
 import { speak } from "@/lib/speech";
+import { getWordEmoji } from "@/lib/word-images";
 
 interface Word {
   id: string;
@@ -13,7 +14,30 @@ interface Word {
   imageUrl: string | null;
 }
 
-type GameType = "spelling" | "picture_match" | "drag_letters";
+type GameType = "spelling" | "picture_match" | "drag_letters" | "picture_speak";
+
+// Confetti component
+function Confetti() {
+  const emojis = ["🌟", "⭐", "✨", "🎉", "🎊", "💫", "🏆", "👏", "🎯", "💯", "🌈", "🎵"];
+  return (
+    <div className="fixed inset-0 z-[100] pointer-events-none">
+      {emojis.map((emoji, i) => (
+        <span
+          key={i}
+          className="confetti-piece"
+          style={{
+            left: `${5 + (i * 8) % 90}%`,
+            animationDelay: `${i * 0.1}s`,
+            animationDuration: `${2 + Math.random() * 1.5}s`,
+            fontSize: `${1.2 + Math.random() * 0.8}rem`,
+          }}
+        >
+          {emoji}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export default function VocabularyPage() {
   return (
@@ -35,6 +59,7 @@ function VocabularyPageContent() {
   const [totalAttempts, setTotalAttempts] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Spelling game state
   const [userInput, setUserInput] = useState("");
@@ -43,6 +68,10 @@ function VocabularyPageContent() {
 
   // Picture match state
   const [matchOptions, setMatchOptions] = useState<string[]>([]);
+
+  // Picture speak state
+  const [isListening, setIsListening] = useState(false);
+  const [spokenText, setSpokenText] = useState("");
 
   useEffect(() => {
     fetchWords();
@@ -76,7 +105,6 @@ function VocabularyPageContent() {
     if (gameType === "spelling" || gameType === "drag_letters") {
       const letters = currentWord.word.split("");
       const shuffled = [...letters].sort(() => Math.random() - 0.5);
-      // Add some extra random letters
       const extras = "abcdefghijklmnopqrstuvwxyz"
         .split("")
         .filter((l) => !letters.includes(l))
@@ -99,6 +127,11 @@ function VocabularyPageContent() {
       setMatchOptions(options);
     }
 
+    if (gameType === "picture_speak") {
+      setSpokenText("");
+      setIsListening(false);
+    }
+
     setFeedback(null);
   }, [currentIndex, gameType, words]);
 
@@ -110,10 +143,8 @@ function VocabularyPageContent() {
 
     if (isCorrect) {
       setScore((p) => p + 1);
-      // Play success sound via Azure TTS
       speak("Great job!", 1.0);
     } else {
-      // Speak the correct word via Azure TTS
       speak(currentWord.word, 0.7);
     }
 
@@ -134,6 +165,8 @@ function VocabularyPageContent() {
         setCurrentIndex((p) => p + 1);
       } else {
         setShowResult(true);
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 3000);
       }
       setFeedback(null);
     }, 1500);
@@ -166,6 +199,7 @@ function VocabularyPageContent() {
     setShowResult(false);
     setGameType(null);
     setFeedback(null);
+    setShowConfetti(false);
   }
 
   function playWordAudio() {
@@ -174,11 +208,57 @@ function VocabularyPageContent() {
     }
   }
 
+  // Picture-speak: use Web Speech API for recognition
+  function startListening() {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("你的瀏覽器不支援語音辨識，請使用 Chrome 瀏覽器");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 3;
+
+    setIsListening(true);
+    setSpokenText("");
+
+    recognition.onresult = (event: any) => {
+      const results = event.results[0];
+      let matched = false;
+      for (let i = 0; i < results.length; i++) {
+        const transcript = results[i].transcript.toLowerCase().trim();
+        setSpokenText(transcript);
+        if (transcript === currentWord.word.toLowerCase()) {
+          matched = true;
+          break;
+        }
+      }
+      if (matched) {
+        checkAnswer(currentWord.word);
+      } else {
+        setSpokenText(results[0].transcript);
+        checkAnswer(results[0].transcript);
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  }
+
   if (loading) {
     return (
       <StudentLayout>
         <div className="text-center py-12">
-          <span className="text-4xl animate-bounce-slow block">✏️</span>
+          <span className="text-4xl animate-emoji-pulse block">✏️</span>
           <p className="text-gray-500 mt-2">載入中...</p>
         </div>
       </StudentLayout>
@@ -222,18 +302,33 @@ function VocabularyPageContent() {
                 圖片配對
               </p>
               <p className="text-sm text-gray-500">
-                看到中文翻譯，選出正確的英文單字
+                看 emoji 圖片，選出正確的英文單字
+              </p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setGameType("picture_speak")}
+            className="card-kid w-full text-left flex items-center gap-4 hover:border-accent-300"
+          >
+            <span className="text-5xl">🎤</span>
+            <div>
+              <p className="text-kid-lg font-black text-accent-600">
+                看圖說英文
+              </p>
+              <p className="text-sm text-gray-500">
+                看到 emoji 圖片，說出對應的英文單字
               </p>
             </div>
           </button>
 
           <button
             onClick={() => setGameType("drag_letters")}
-            className="card-kid w-full text-left flex items-center gap-4 hover:border-accent-300"
+            className="card-kid w-full text-left flex items-center gap-4 hover:border-yellow-300"
           >
             <span className="text-5xl">🧩</span>
             <div>
-              <p className="text-kid-lg font-black text-accent-600">
+              <p className="text-kid-lg font-black text-yellow-600">
                 字母排列
               </p>
               <p className="text-sm text-gray-500">
@@ -248,11 +343,12 @@ function VocabularyPageContent() {
 
   // Result screen
   if (showResult) {
-    const percentage = Math.round((score / totalAttempts) * 100);
+    const percentage = totalAttempts > 0 ? Math.round((score / totalAttempts) * 100) : 0;
     return (
       <StudentLayout>
+        {showConfetti && <Confetti />}
         <div className="text-center py-8">
-          <span className="text-7xl block mb-4 animate-star-pop">
+          <span className="text-7xl block mb-4 animate-correct">
             {percentage >= 80 ? "🌟" : percentage >= 60 ? "👍" : "💪"}
           </span>
           <h1 className="text-kid-2xl font-black text-gray-800 mb-2">
@@ -297,6 +393,9 @@ function VocabularyPageContent() {
     );
   }
 
+  // Get current word emoji
+  const wordEmoji = getWordEmoji(currentWord.word);
+
   // Active game
   return (
     <StudentLayout>
@@ -330,44 +429,119 @@ function VocabularyPageContent() {
               : "bg-red-500/10"
           }`}
         >
-          <span className="text-8xl animate-star-pop">
-            {feedback === "correct" ? "✅" : "❌"}
-          </span>
+          <div className="flex flex-col items-center">
+            <span className={`text-8xl ${feedback === "correct" ? "animate-correct" : "animate-shake"}`}>
+              {feedback === "correct" ? "✅" : "❌"}
+            </span>
+            {/* Star burst particles on correct */}
+            {feedback === "correct" && (
+              <div className="absolute">
+                {["⭐", "✨", "🌟", "💫"].map((s, i) => (
+                  <span
+                    key={i}
+                    className="absolute animate-star-burst text-2xl"
+                    style={{
+                      top: `${-30 + Math.sin(i * 1.57) * 40}px`,
+                      left: `${-10 + Math.cos(i * 1.57) * 40}px`,
+                      animationDelay: `${i * 0.1}s`,
+                    }}
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* Game content */}
       <div className="card-kid mb-4 text-center">
-        {/* Listen button */}
-        <button
-          onClick={playWordAudio}
-          className="w-20 h-20 rounded-full bg-primary-100 flex items-center justify-center mx-auto mb-4 hover:bg-primary-200 transition-all active:scale-95"
-        >
-          <span className="text-4xl">🔊</span>
-        </button>
+        {/* Emoji display for the word */}
+        {wordEmoji && (
+          <div
+            className={`text-6xl mb-3 ${feedback === "correct" ? "animate-correct" : feedback === "wrong" ? "animate-shake" : "animate-emoji-pulse"}`}
+          >
+            {wordEmoji.emoji}
+          </div>
+        )}
 
-        {gameType === "picture_match" ? (
+        {gameType === "picture_speak" ? (
           <>
+            {/* 看圖說英文模式 */}
+            {!wordEmoji && (
+              <div className="w-24 h-24 rounded-full bg-accent-100 flex items-center justify-center mx-auto mb-4">
+                <span className="text-5xl">❓</span>
+              </div>
+            )}
+            <p className="text-kid-lg font-bold text-gray-500 mb-2">
+              {currentWord.translation}
+            </p>
+            <p className="text-sm text-gray-400 mb-6">看圖片，說出英文單字！</p>
+
+            <button
+              onClick={startListening}
+              disabled={isListening || feedback !== null}
+              className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 transition-all ${
+                isListening
+                  ? "bg-red-100 recording-pulse"
+                  : "bg-accent-100 hover:bg-accent-200 active:scale-95"
+              }`}
+            >
+              <span className="text-5xl">{isListening ? "🔴" : "🎤"}</span>
+            </button>
+
+            {spokenText && (
+              <p className="text-sm text-gray-500 mb-2">
+                你說的：<span className="font-bold text-gray-700">{spokenText}</span>
+              </p>
+            )}
+
+            <p className="text-xs text-gray-400">點擊麥克風開始說話</p>
+          </>
+        ) : gameType === "picture_match" ? (
+          <>
+            {/* 圖片配對模式 — 顯示 emoji + 翻譯 */}
+            {!wordEmoji && (
+              <button
+                onClick={playWordAudio}
+                className="w-20 h-20 rounded-full bg-primary-100 flex items-center justify-center mx-auto mb-4 hover:bg-primary-200 transition-all active:scale-95"
+              >
+                <span className="text-4xl">🔊</span>
+              </button>
+            )}
             <p className="text-kid-xl font-black text-gray-700 mb-2">
               {currentWord.translation}
             </p>
             <p className="text-sm text-gray-400 mb-6">選出正確的英文單字</p>
             <div className="grid grid-cols-2 gap-3">
-              {matchOptions.map((option, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => checkAnswer(option)}
-                  disabled={feedback !== null}
-                  className="btn-kid bg-white border-2 border-gray-200 text-gray-700
-                           hover:border-primary-300 hover:bg-primary-50 text-kid-lg"
-                >
-                  {option}
-                </button>
-              ))}
+              {matchOptions.map((option, idx) => {
+                const optEmoji = getWordEmoji(option);
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => checkAnswer(option)}
+                    disabled={feedback !== null}
+                    className="btn-kid bg-white border-2 border-gray-200 text-gray-700
+                             hover:border-primary-300 hover:bg-primary-50 text-kid-lg
+                             flex items-center justify-center gap-2"
+                  >
+                    {optEmoji && <span>{optEmoji.emoji}</span>}
+                    {option}
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : (
           <>
+            {/* 拼字 / 字母排列模式 */}
+            <button
+              onClick={playWordAudio}
+              className="w-20 h-20 rounded-full bg-primary-100 flex items-center justify-center mx-auto mb-4 hover:bg-primary-200 transition-all active:scale-95"
+            >
+              <span className="text-4xl">🔊</span>
+            </button>
             <p className="text-sm text-gray-400 mb-1">聽發音，拼出這個單字</p>
             <p className="text-kid-lg font-bold text-gray-500 mb-4">
               {currentWord.translation}

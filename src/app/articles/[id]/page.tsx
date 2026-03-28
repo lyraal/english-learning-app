@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import StudentLayout from "@/components/student/StudentLayout";
 import { getLevelLabel, getLevelColor } from "@/lib/utils";
 import { speak, stopSpeaking, speakSentences } from "@/lib/speech";
+import { getWordEmoji, getCategoryIcon } from "@/lib/word-images";
 
 interface ArticleDetail {
   id: string;
@@ -14,6 +15,7 @@ interface ArticleDetail {
   contentZh: string | null;
   level: string;
   topic: string | null;
+  category: string | null;
   words: Array<{
     id: string;
     word: string;
@@ -43,14 +45,12 @@ export default function ArticleDetailPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(0.8);
 
-  // 用 ref 儲存取消函式
   const cancelPlayRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     fetchArticle();
   }, [params.id]);
 
-  // 組件卸載時停止播放
   useEffect(() => {
     return () => {
       if (cancelPlayRef.current) cancelPlayRef.current();
@@ -73,7 +73,6 @@ export default function ArticleDetailPage() {
 
   function handlePlayAll() {
     if (isPlaying) {
-      // 停止播放
       if (cancelPlayRef.current) {
         cancelPlayRef.current();
         cancelPlayRef.current = null;
@@ -82,7 +81,6 @@ export default function ArticleDetailPage() {
       setIsPlaying(false);
       setHighlightedSentence(-1);
     } else {
-      // 開始逐句播放
       setIsPlaying(true);
       const cancel = speakSentences(
         sentences,
@@ -99,7 +97,6 @@ export default function ArticleDetailPage() {
   }
 
   async function handleSentenceClick(sentence: string, idx: number) {
-    // 停止目前播放
     if (cancelPlayRef.current) {
       cancelPlayRef.current();
       cancelPlayRef.current = null;
@@ -111,7 +108,7 @@ export default function ArticleDetailPage() {
     try {
       await speak(sentence, playbackRate);
     } catch {
-      // 忽略播放錯誤
+      // ignore
     }
     setHighlightedSentence(-1);
   }
@@ -122,7 +119,6 @@ export default function ArticleDetailPage() {
     );
 
     if (wordData) {
-      // 用 Azure TTS 朗讀單字
       speak(wordData.word, 0.7);
 
       setActiveWord({
@@ -140,7 +136,7 @@ export default function ArticleDetailPage() {
     return (
       <StudentLayout>
         <div className="text-center py-12">
-          <span className="text-4xl animate-bounce-slow block">📖</span>
+          <span className="text-4xl animate-emoji-pulse block">📖</span>
           <p className="text-gray-500 mt-2">載入文章中...</p>
         </div>
       </StudentLayout>
@@ -163,6 +159,8 @@ export default function ArticleDetailPage() {
       </StudentLayout>
     );
   }
+
+  const categoryInfo = article.category ? getCategoryIcon(article.category) : null;
 
   return (
     <StudentLayout>
@@ -188,12 +186,17 @@ export default function ArticleDetailPage() {
           >
             {getLevelLabel(article.level)}
           </span>
-          {article.topic && (
+          {categoryInfo && (
+            <span className="text-xs text-gray-400 flex items-center gap-1">
+              {categoryInfo.emoji} {categoryInfo.label}
+            </span>
+          )}
+          {!categoryInfo && article.topic && (
             <span className="text-xs text-gray-400">{article.topic}</span>
           )}
         </div>
         <h1 className="text-kid-xl font-black text-gray-800">
-          {article.title}
+          {categoryInfo ? `${categoryInfo.emoji} ` : ""}{article.title}
         </h1>
         <p className="text-sm text-gray-500 mt-1">{article.titleZh}</p>
       </div>
@@ -290,28 +293,34 @@ export default function ArticleDetailPage() {
           📝 重點單字
         </h2>
         <div className="space-y-3">
-          {article.words.map((word) => (
-            <div
-              key={word.id}
-              className="flex items-center gap-3 p-3 bg-gray-50 rounded-kid cursor-pointer hover:bg-primary-50 transition-colors"
-              onClick={() => speak(word.word, 0.7)}
-            >
-              <span className="text-2xl">🔊</span>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-kid-base text-primary-700">
-                    {word.word}
-                  </span>
-                  {word.phonetic && (
-                    <span className="text-xs text-gray-400">
-                      {word.phonetic}
+          {article.words.map((word) => {
+            const emoji = getWordEmoji(word.word);
+            return (
+              <div
+                key={word.id}
+                className="flex items-center gap-3 p-3 bg-gray-50 rounded-kid cursor-pointer hover:bg-primary-50 transition-colors"
+                onClick={() => speak(word.word, 0.7)}
+              >
+                {/* Emoji or speaker icon */}
+                <span className="text-2xl w-10 text-center">
+                  {emoji ? emoji.emoji : "🔊"}
+                </span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-kid-base text-primary-700">
+                      {word.word}
                     </span>
-                  )}
+                    {word.phonetic && (
+                      <span className="text-xs text-gray-400">
+                        {word.phonetic}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600">{word.translation}</p>
                 </div>
-                <p className="text-sm text-gray-600">{word.translation}</p>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -339,16 +348,26 @@ export default function ArticleDetailPage() {
         </button>
       </div>
 
-      {/* 單字彈出卡片 */}
+      {/* 單字彈出卡片 — 含 emoji */}
       {activeWord && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/20"
           onClick={() => setActiveWord(null)}
         >
           <div
-            className="bg-white rounded-kid-lg p-6 shadow-2xl max-w-xs w-full mx-4 animate-star-pop"
+            className="bg-white rounded-kid-lg p-6 shadow-2xl max-w-xs w-full mx-4 animate-fade-in-up"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Emoji display */}
+            {(() => {
+              const emoji = getWordEmoji(activeWord.word);
+              return emoji ? (
+                <div className="text-5xl text-center mb-2 animate-correct">
+                  {emoji.emoji}
+                </div>
+              ) : null;
+            })()}
+
             <div className="text-center mb-3">
               <h3 className="text-kid-2xl font-black text-primary-600">
                 {activeWord.word}

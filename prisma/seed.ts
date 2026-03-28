@@ -29,10 +29,37 @@ async function main() {
   await prisma.article.deleteMany();
   await prisma.parentChild.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.organization.deleteMany();
 
   console.log("  ✅ 清除舊資料完成");
 
-  // Create teacher
+  // ===== Create default organization =====
+  const demoOrg = await prisma.organization.create({
+    data: {
+      name: "示範補習班",
+      slug: "demo",
+      plan: "pro",
+      maxStudents: 100,
+      maxTeachers: 10,
+      logo: "🏫",
+    },
+  });
+  console.log(`  ✅ 建立預設組織：${demoOrg.name} (slug: ${demoOrg.slug})`);
+
+  // Create ADMIN user (super admin, no org)
+  const admin = await prisma.user.create({
+    data: {
+      name: "系統管理員",
+      email: "admin@example.com",
+      username: "admin",
+      password: await hash("admin123", 10),
+      role: "ADMIN",
+      avatar: "👑",
+    },
+  });
+  console.log(`  ✅ 建立超級管理員：${admin.name} (admin / admin123)`);
+
+  // Create teacher (associated with demo org)
   const teacher = await prisma.user.create({
     data: {
       name: seedTeacher.name,
@@ -40,11 +67,12 @@ async function main() {
       password: await hash(seedTeacher.password, 10),
       role: seedTeacher.role,
       avatar: "👩‍🏫",
+      organizationId: demoOrg.id,
     },
   });
   console.log(`  ✅ 建立老師：${teacher.name} (${teacher.email})`);
 
-  // Create students
+  // Create students (associated with demo org)
   const students: Awaited<ReturnType<typeof prisma.user.create>>[] = [];
   for (const s of seedStudents) {
     const student = await prisma.user.create({
@@ -56,19 +84,21 @@ async function main() {
         points: Math.floor(Math.random() * 200),
         streak: Math.floor(Math.random() * 10),
         avatar: ["😊", "😎", "🤓"][students.length % 3],
+        organizationId: demoOrg.id,
       },
     });
     students.push(student);
     console.log(`  ✅ 建立學生：${student.name} (${student.username})`);
   }
 
-  // Create class
+  // Create class (associated with demo org)
   const classRoom = await prisma.class.create({
     data: {
       name: seedClass.name,
       gradeLevel: seedClass.gradeLevel,
       description: seedClass.description,
       teacherId: teacher.id,
+      organizationId: demoOrg.id,
     },
   });
   console.log(`  ✅ 建立班級：${classRoom.name}`);
@@ -90,7 +120,7 @@ async function main() {
     "食物/水果": "daily_life",
   };
 
-  // Create original articles (Level 1-3)
+  // Create original articles (Level 1-3) — associated with demo org
   for (const articleData of seedArticles) {
     const article = await prisma.article.create({
       data: {
@@ -104,6 +134,7 @@ async function main() {
         category: categoryMap[articleData.topic || ""] || "daily_life",
         authorId: teacher.id,
         isPublished: true,
+        organizationId: demoOrg.id,
       },
     });
 
@@ -124,7 +155,7 @@ async function main() {
     );
   }
 
-  // Create advanced articles (Level 4-6)
+  // Create advanced articles (Level 4-6) — associated with demo org
   for (const articleData of seedArticlesAdvanced) {
     const article = await prisma.article.create({
       data: {
@@ -138,6 +169,7 @@ async function main() {
         category: articleData.category,
         authorId: teacher.id,
         isPublished: true,
+        organizationId: demoOrg.id,
       },
     });
 
@@ -201,7 +233,7 @@ async function main() {
     console.log("  ✅ 建立範例徽章");
   }
 
-  // Create parent user
+  // Create parent user (associated with demo org)
   const parent1 = await prisma.user.create({
     data: {
       name: "王爸爸",
@@ -209,6 +241,7 @@ async function main() {
       password: await hash("123456", 10),
       role: "PARENT",
       avatar: "👨",
+      organizationId: demoOrg.id,
     },
   });
   console.log(`  ✅ 建立家長：${parent1.name} (${parent1.username})`);
@@ -225,9 +258,11 @@ async function main() {
   }
 
   console.log("\n🎉 Seed 完成！");
+  console.log(`   超級管理員：admin / admin123`);
   console.log(`   老師帳號：${seedTeacher.email} / ${seedTeacher.password}`);
   console.log(`   學生帳號：student1 / 123456`);
   console.log(`   家長帳號：parent1 / 123456`);
+  console.log(`   預設組織：${demoOrg.name} (slug: ${demoOrg.slug}, plan: ${demoOrg.plan})`);
   console.log(`   共 ${seedArticles.length + seedArticlesAdvanced.length} 篇文章 (Level 1-6)`);
 }
 

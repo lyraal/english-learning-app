@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { withOrgFilter } from "@/lib/organization";
 
 export async function GET() {
   try {
@@ -13,6 +14,7 @@ export async function GET() {
     }
 
     const teacherId = (session.user as any).id;
+    const orgId = (session.user as any).organizationId || null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -23,9 +25,9 @@ export async function GET() {
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-    // Total students in teacher's classes
+    // Total students in teacher's classes (with org filter)
     const classes = await prisma.class.findMany({
-      where: { teacherId },
+      where: withOrgFilter({ teacherId }, orgId),
       include: {
         students: { include: { student: true } },
         _count: { select: { students: true, assignments: true } },

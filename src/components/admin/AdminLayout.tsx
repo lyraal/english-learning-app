@@ -16,6 +16,7 @@ const sidebarItems = [
   { href: "/admin/reports", icon: "📈", label: "學生報告" },
   { href: "/admin/notify", icon: "🔔", label: "LINE 通知" },
   { href: "/admin/accounts", icon: "👥", label: "帳號管理" },
+  { href: "/admin/organizations", icon: "🏢", label: "補習班管理" },
 ];
 
 export default function AdminLayout({

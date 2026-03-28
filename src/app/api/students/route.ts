@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { hash } from "bcryptjs";
 import prisma from "@/lib/prisma";
+import { withOrgFilter } from "@/lib/organization";
 
 export async function GET() {
   try {
@@ -13,8 +14,10 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const orgId = (session.user as any).organizationId || null;
+
     const students = await prisma.user.findMany({
-      where: { role: "STUDENT" },
+      where: withOrgFilter({ role: "STUDENT" }, orgId),
       include: {
         classEnrollments: { include: { class: { select: { name: true } } } },
         childOf: {
@@ -38,6 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const orgId = (session.user as any).organizationId || null;
     const data = await req.json();
     const student = await prisma.user.create({
       data: {
@@ -45,6 +49,7 @@ export async function POST(req: NextRequest) {
         username: data.username,
         password: await hash(data.password || "123456", 10),
         role: "STUDENT",
+        organizationId: orgId,
       },
     });
 

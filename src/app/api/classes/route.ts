@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { withOrgFilter } from "@/lib/organization";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,11 +15,20 @@ export async function GET(req: NextRequest) {
     const includeStudents = searchParams.get("includeStudents") === "true";
 
     const userRole = (session.user as any).role;
-    const where = userRole === "STUDENT"
-      ? { students: { some: { studentId: (session.user as any).id } } }
-      : userRole === "ADMIN"
-      ? {}
-      : { teacherId: (session.user as any).id };
+    const orgId = (session.user as any).organizationId || null;
+
+    let where: Record<string, any> = {};
+    if (userRole === "STUDENT") {
+      where = { students: { some: { studentId: (session.user as any).id } } };
+    } else if (userRole === "ADMIN") {
+      // ADMIN sees all within their org (or all if no org)
+      where = {};
+    } else {
+      where = { teacherId: (session.user as any).id };
+    }
+
+    // Apply org filter
+    where = withOrgFilter(where, orgId);
 
     const classes = await prisma.class.findMany({
       where,
@@ -46,6 +56,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const orgId = (session.user as any).organizationId || null;
     const data = await req.json();
     const classRoom = await prisma.class.create({
       data: {
@@ -53,6 +64,7 @@ export async function POST(req: NextRequest) {
         gradeLevel: data.gradeLevel || 1,
         description: data.description || null,
         teacherId: (session.user as any).id,
+        organizationId: orgId,
       },
     });
 

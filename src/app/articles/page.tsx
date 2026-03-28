@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import StudentLayout from "@/components/student/StudentLayout";
 import { getLevelLabel, getLevelColor } from "@/lib/utils";
+import { getCategoryIcon } from "@/lib/word-images";
 
 interface Article {
   id: string;
@@ -12,6 +13,7 @@ interface Article {
   level: string;
   gradeLevel: number;
   topic: string | null;
+  category: string | null;
   imageUrl: string | null;
   _count?: { words: number };
 }
@@ -46,7 +48,26 @@ export default function ArticlesPage() {
     { value: "LEVEL1", label: "Level 1", emoji: "🌱" },
     { value: "LEVEL2", label: "Level 2", emoji: "🌿" },
     { value: "LEVEL3", label: "Level 3", emoji: "🌳" },
+    { value: "LEVEL4", label: "Level 4", emoji: "🌲" },
+    { value: "LEVEL5", label: "Level 5", emoji: "🏔️" },
+    { value: "LEVEL6", label: "Level 6", emoji: "🚀" },
   ];
+
+  // Get emoji for article based on category first, then topic fallback
+  function getArticleEmoji(article: Article): string {
+    if (article.category) {
+      return getCategoryIcon(article.category).emoji;
+    }
+    // Legacy topic-based fallback
+    switch (article.topic) {
+      case "動物": return "🐾";
+      case "家庭": return "👨‍👩‍👦";
+      case "戶外活動": return "🏞️";
+      case "學校生活": return "🏫";
+      case "食物/水果": return "🍎";
+      default: return "📖";
+    }
+  }
 
   return (
     <StudentLayout>
@@ -74,7 +95,7 @@ export default function ArticlesPage() {
       {/* 文章列表 */}
       {loading ? (
         <div className="text-center py-12">
-          <span className="text-4xl animate-bounce-slow block">📖</span>
+          <span className="text-4xl animate-emoji-pulse block">📖</span>
           <p className="text-gray-500 mt-2">載入文章中...</p>
         </div>
       ) : filtered.length === 0 ? (
@@ -84,32 +105,23 @@ export default function ArticlesPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((article) => (
+          {filtered.map((article, idx) => (
             <Link
               key={article.id}
               href={`/articles/${article.id}`}
-              className="card-kid flex items-center gap-4 !py-4"
+              className="card-kid flex items-center gap-4 !py-4 animate-fade-in-up"
+              style={{ animationDelay: `${idx * 0.05}s` }}
             >
-              {/* 封面圖示 */}
+              {/* 封面圖示 — 使用 category emoji */}
               <div className="w-16 h-16 rounded-kid bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center flex-shrink-0">
                 <span className="text-3xl">
-                  {article.topic === "動物"
-                    ? "🐱"
-                    : article.topic === "家庭"
-                    ? "👨‍👩‍👦"
-                    : article.topic === "戶外活動"
-                    ? "🏞️"
-                    : article.topic === "學校生活"
-                    ? "🏫"
-                    : article.topic === "食物/水果"
-                    ? "🍎"
-                    : "📖"}
+                  {getArticleEmoji(article)}
                 </span>
               </div>
 
               <div className="flex-1 min-w-0">
                 <p className="font-black text-kid-base text-gray-800 truncate">
-                  {article.title}
+                  {getArticleEmoji(article)} {article.title}
                 </p>
                 <p className="text-sm text-gray-500 truncate">
                   {article.titleZh}
@@ -122,6 +134,11 @@ export default function ArticlesPage() {
                   >
                     {getLevelLabel(article.level)}
                   </span>
+                  {article.category && (
+                    <span className="text-xs text-gray-400">
+                      {getCategoryIcon(article.category).label}
+                    </span>
+                  )}
                   {article._count && (
                     <span className="text-xs text-gray-400">
                       {article._count.words} 個單字
