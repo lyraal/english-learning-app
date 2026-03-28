@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { ACHIEVEMENTS } from "@/lib/gamification";
+import { notifyAsync, notifyBadgeEarned, notifyStreakMilestone } from "@/lib/notifications";
 
 export async function POST() {
   try {
@@ -103,7 +104,16 @@ export async function POST() {
         });
 
         newlyEarned.push(badge);
+
+        // LINE 通知家長
+        notifyAsync(() => notifyBadgeEarned(userId, def.title, def.icon, def.points));
       }
+    }
+
+    // 檢查連續學習里程碑
+    const milestones = [3, 7, 14, 30];
+    if (milestones.includes(user.streak)) {
+      notifyAsync(() => notifyStreakMilestone(userId, user.streak));
     }
 
     return NextResponse.json({ newlyEarned });

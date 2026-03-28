@@ -14,6 +14,7 @@ const sidebarItems = [
   { href: "/admin/vocabulary", icon: "📚", label: "單字管理" },
   { href: "/admin/assignments", icon: "📋", label: "作業指派" },
   { href: "/admin/reports", icon: "📈", label: "學生報告" },
+  { href: "/admin/notify", icon: "🔔", label: "LINE 通知" },
   { href: "/admin/accounts", icon: "👥", label: "帳號管理" },
 ];
 

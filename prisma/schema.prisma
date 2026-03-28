@@ -25,6 +25,9 @@ model User {
   role          UserRole  @default(STUDENT)
   avatar        String?
   isActive      Boolean   @default(true)
+  lineNotifyToken  String?   // LINE User ID（Messaging API 推播用）
+  lineBindingCode  String?   // 6位數綁定碼（家長綁定 LINE 用）
+  notificationPrefs String?  // JSON: 通知偏好設定
   points        Int       @default(0)
   streak        Int       @default(0)
   lastActiveAt  DateTime?
