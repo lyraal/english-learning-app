@@ -3,6 +3,7 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
   },
+  skipTrailingSlashRedirect: true,
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',

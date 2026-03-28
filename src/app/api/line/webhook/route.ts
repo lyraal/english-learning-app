@@ -19,10 +19,17 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     const signature = req.headers.get("x-line-signature") || "";
 
-    // 驗證簽名（生產環境必須驗證）
-    if (process.env.NODE_ENV === "production" && !verifyLineSignature(body, signature)) {
-      console.error("[LINE Webhook] 簽名驗證失敗");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
+    // 驗證簽名
+    const channelSecret = process.env.LINE_CHANNEL_SECRET;
+    if (channelSecret) {
+      const isValid = verifyLineSignature(body, signature);
+      if (!isValid) {
+        console.error("[LINE Webhook] 簽名驗證失敗。請確認 LINE_CHANNEL_SECRET 環境變數正確。");
+        // 仍然回傳 200 給 LINE，避免 LINE 重試導致大量錯誤
+        return NextResponse.json({ status: "signature_failed" }, { status: 200 });
+      }
+    } else {
+      console.warn("[LINE Webhook] LINE_CHANNEL_SECRET 未設定，跳過簽名驗證");
     }
 
     const data = JSON.parse(body);
