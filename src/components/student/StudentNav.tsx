@@ -12,6 +12,7 @@ const navItems = [
   { href: "/conversation", icon: "💬", label: "對話" },
   { href: "/writing", icon: "✍️", label: "寫作" },
   { href: "/achievements", icon: "🏆", label: "成就" },
+  { href: "/settings", icon: "⚙️", label: "設定" },
 ];
 
 export default function StudentNav() {

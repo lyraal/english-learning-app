@@ -32,6 +32,7 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
     { label: "首頁", icon: "🏠", path: "/parent" },
     { label: "孩子", icon: "👶", path: "/parent" },
     { label: "通知", icon: "🔔", path: "/parent/notifications" },
+    { label: "設定", icon: "⚙️", path: "/parent/settings" },
   ];
 
   return (

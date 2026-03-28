@@ -41,5 +41,7 @@ export const config = {
     "/speaking/:path*",
     "/progress/:path*",
     "/admin/:path*",
+    "/settings/:path*",
+    "/parent/:path*",
   ],
 };

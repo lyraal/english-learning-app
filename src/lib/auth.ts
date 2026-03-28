@@ -29,6 +29,11 @@ export const authOptions: NextAuthOptions = {
           throw new Error("找不到此帳號");
         }
 
+        // 檢查帳號是否已停用
+        if (user.isActive === false) {
+          throw new Error("此帳號已被停用，請聯絡老師或管理員");
+        }
+
         const isValid = await compare(credentials.password, user.password);
         if (!isValid) {
           throw new Error("密碼錯誤");
